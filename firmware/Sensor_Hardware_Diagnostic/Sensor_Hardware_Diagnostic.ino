@@ -13,7 +13,7 @@
  *   - Power Bus:             VIN (5V for BH1750 & Relay) | 3V3 (Soil & DHT11) | GND
  *
  * Telemetry Pipeline:
- *   - Cadence: 10 seconds
+ *   - Cadence: 6 seconds
  *   - Dual-Link Redundancy: USB Cable Serial JSON + Wi-Fi HTTP REST POST
  * ==============================================================================
  */
@@ -283,7 +283,7 @@ public:
 // ==============================================================================
 SensorManager sensorManager;
 unsigned long lastTelemetryTime = 0;
-const unsigned long telemetryInterval = 10000; // 10-Second Cadence
+const unsigned long telemetryInterval = 6000; // 6-Second Cadence
 int telemetryCycle = 0;
 
 void setup() {
@@ -297,7 +297,7 @@ void setup() {
   sensorManager.begin();
 
   Serial.println(F("=========================================================="));
-  Serial.println(F("SYSTEM READY — Polling and streaming sensors every 10s..."));
+  Serial.println(F("SYSTEM READY — Polling and streaming sensors every 6s..."));
   Serial.println(F("==========================================================\n"));
 }
 
