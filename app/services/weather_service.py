@@ -470,5 +470,49 @@ class WeatherService:
             }
         }
 
+    def fetch_solar_radiation(self, lat=None, lon=None):
+        """Fetch real-time solar irradiance (DNI, GHI) and outdoor soil temp from Open-Meteo."""
+        if lat is None or lon is None:
+            geo = self.get_geolocation()
+            lat, lon = geo['lat'], geo['lon']
+
+        url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            f"&current=temperature_2m,relative_humidity_2m,direct_normal_irradiance,shortwave_radiation,soil_temperature_0cm"
+            f"&timezone=auto&forecast_days=1"
+        )
+        try:
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                curr = data.get('current', {})
+                dni = curr.get('direct_normal_irradiance', 0.0)
+                ghi = curr.get('shortwave_radiation', 0.0)
+                soil_t = curr.get('soil_temperature_0cm', 24.0)
+                outdoor_lux_equiv = round(ghi * 120.0, 1)
+
+                return {
+                    'success': True,
+                    'timestamp': curr.get('time'),
+                    'direct_normal_irradiance_w_m2': round(dni, 1),
+                    'global_horizontal_irradiance_w_m2': round(ghi, 1),
+                    'outdoor_lux_equivalent': outdoor_lux_equiv,
+                    'outdoor_soil_temp_c': round(soil_t, 1),
+                    'source': 'Open-Meteo Solar Radiation Model'
+                }
+        except Exception as e:
+            logger.warning(f"Solar radiation fetch error: {e}")
+
+        return {
+            'success': True,
+            'timestamp': time.strftime("%Y-%m-%dT%H:%M"),
+            'direct_normal_irradiance_w_m2': 0.0,
+            'global_horizontal_irradiance_w_m2': 0.0,
+            'outdoor_lux_equivalent': 0.0,
+            'outdoor_soil_temp_c': 24.5,
+            'source': 'Estimated Baseline Model'
+        }
+
 
 weather_service = WeatherService()

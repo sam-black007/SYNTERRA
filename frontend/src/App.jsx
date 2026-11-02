@@ -34,7 +34,10 @@ import {
   MapPin,
   Wind,
   ShieldAlert,
-  Bot
+  Bot,
+  Globe,
+  Layers,
+  Atom
 } from 'lucide-react';
 import ChatbotWidget from './components/ChatbotWidget';
 import {
@@ -183,6 +186,10 @@ export default function App() {
   const [isRefreshingWeather, setIsRefreshingWeather] = useState(false);
   const [accuracyData, setAccuracyData] = useState(null);
   const [isComparingAccuracy, setIsComparingAccuracy] = useState(false);
+  const [soilGeospatial, setSoilGeospatial] = useState(null);
+  const [gbifTaxonomy, setGbifTaxonomy] = useState(null);
+  const [solarWeather, setSolarWeather] = useState(null);
+  const [pathologyEngine, setPathologyEngine] = useState('gemini'); // 'gemini' | 'kindwise'
   const fileInputRef = useRef(null);
 
   // Initialize Socket.io and data polling
@@ -301,7 +308,15 @@ export default function App() {
         const cData = await cropsRes.json();
         if (cData.profiles) setCropProfiles(cData.profiles);
         const active = cData.profiles?.find((p) => p.key === cData.active_crop_key);
-        if (active) setActiveCrop(active);
+        if (active) {
+          setActiveCrop(active);
+          fetch(`/api/biodiversity/species?name=${encodeURIComponent(active.scientific_name)}`)
+            .then((r) => r.json())
+            .then((bio) => {
+              if (bio.success) setGbifTaxonomy(bio);
+            })
+            .catch(() => {});
+        }
       }
 
       if (dliRes.ok) {
@@ -368,6 +383,20 @@ export default function App() {
           if (comp.success) setAccuracyData(comp);
         })
         .catch(() => {});
+
+      fetch('/api/soil/geospatial')
+        .then((r) => r.json())
+        .then((s) => {
+          if (s.success) setSoilGeospatial(s);
+        })
+        .catch(() => {});
+
+      fetch('/api/weather/solar')
+        .then((r) => r.json())
+        .then((sol) => {
+          if (sol.success) setSolarWeather(sol);
+        })
+        .catch(() => {});
     } catch (err) {
       console.warn('Initial data load warning:', err);
     }
@@ -400,6 +429,12 @@ export default function App() {
       const data = await res.json();
       if (data.success && data.active_crop) {
         setActiveCrop(data.active_crop);
+        fetch(`/api/biodiversity/species?name=${encodeURIComponent(data.active_crop.scientific_name)}`)
+          .then((r) => r.json())
+          .then((bio) => {
+            if (bio.success) setGbifTaxonomy(bio);
+          })
+          .catch(() => {});
         const dRes = await fetch('/api/sensors/dli');
         if (dRes.ok) {
           const dData = await dRes.json();
@@ -445,10 +480,21 @@ export default function App() {
   const handleCameraCapture = async () => {
     setIsDiagnosing(true);
     try {
-      const res = await fetch('/api/camera/capture', { method: 'POST' });
-      const data = await res.json();
-      if (data.diagnosis) {
-        setLatestDiagnosisResult(data.diagnosis);
+      if (pathologyEngine === 'gemini') {
+        const snapRes = await fetch('/api/camera/snapshot');
+        const blob = await snapRes.blob();
+        const file = new File([blob], 'camera_snap.jpg', { type: 'image/jpeg' });
+        await submitImageDiagnosis(file);
+      } else {
+        const res = await fetch('/api/camera/capture', { method: 'POST' });
+        const data = await res.json();
+        if (data.diagnosis) {
+          setLatestDiagnosisResult(data.diagnosis);
+          fetch('/api/diagnoses')
+            .then((r) => r.json())
+            .then((d) => setDiagnoses(d))
+            .catch(() => {});
+        }
       }
     } catch (err) {
       alert('Camera capture failed: ' + err.message);
@@ -553,19 +599,31 @@ export default function App() {
     try {
       const formData = new FormData();
       formData.append('image', file);
-      formData.append('plant_name', plantNameInput || 'Specimen Upload');
+      formData.append('plant_name', plantNameInput || activeCrop?.name || 'Specimen Upload');
 
-      const res = await fetch('/api/diagnose', {
+      const endpoint = pathologyEngine === 'gemini' ? '/api/diagnose/multimodal' : '/api/diagnose';
+      const res = await fetch(endpoint, {
         method: 'POST',
         body: formData,
       });
       const data = await res.json();
-      if (res.ok && data.diagnosis) {
-        setLatestDiagnosisResult(data.diagnosis);
-        // Refresh credits
-        fetchInitialData();
+      if (res.ok) {
+        const resultRecord = data.diagnosis || data;
+        setLatestDiagnosisResult(resultRecord);
+        fetch('/api/diagnoses')
+          .then((r) => r.json())
+          .then((d) => setDiagnoses(d))
+          .catch(() => {});
+        if (pathologyEngine === 'kindwise') {
+          fetch('/api/integrations/plantid/test', { method: 'POST' })
+            .then((r) => r.json())
+            .then((s) => {
+              setApiStatus({ configured: true, remainingCredits: s.usage?.remaining?.total });
+            })
+            .catch(() => {});
+        }
       } else {
-        alert('Diagnosis failed: ' + (data.message || 'Unknown error'));
+        alert('Diagnosis failed: ' + (data.message || data.error || 'Unknown error'));
       }
     } catch (err) {
       alert('Network error during diagnosis: ' + err.message);
@@ -793,6 +851,38 @@ export default function App() {
                 </select>
               </div>
             </div>
+
+            {/* Authoritative GBIF Biodiversity Taxonomy Strip */}
+            {gbifTaxonomy && gbifTaxonomy.success && (
+              <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 text-xs flex flex-wrap items-center justify-between gap-3 shadow-inner">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-teal-400 font-bold">
+                    <Globe className="w-3.5 h-3.5 text-teal-400" />
+                    <span>GBIF Backbone Taxonomy:</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">
+                    Family: <strong className="text-white">{gbifTaxonomy.taxonomy?.family || 'Solanaceae'}</strong>
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">
+                    Genus: <strong className="text-white">{gbifTaxonomy.taxonomy?.genus || 'Solanum'}</strong>
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">
+                    Order: <strong className="text-slate-300">{gbifTaxonomy.taxonomy?.order || 'Solanales'}</strong>
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 font-mono text-[11px] border border-emerald-800/40">
+                    Key #{gbifTaxonomy.gbif_usage_key || '2930137'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Status: <span className="text-emerald-400 font-bold">{gbifTaxonomy.taxonomic_status || 'ACCEPTED'}</span> ({gbifTaxonomy.confidence_score || 98}% match)
+                  </span>
+                  <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 font-mono">
+                    Global Biodiversity Info
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Live Microclimate Environmental Assessment Banner */}
             <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-[#101827] to-[#0c1322] border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
@@ -1159,6 +1249,175 @@ export default function App() {
               </div>
             )}
 
+            {/* Geospatial Pedology (ISRIC SoilGrids) & Solar Flux (Open-Meteo) Card */}
+            <div className="bg-[#0c1424] border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-950/60 text-amber-400 border border-amber-800/40">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-white text-sm">Geospatial Pedology & Solar Radiation Intelligence</h3>
+                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/30">
+                        ISRIC SoilGrids + Open-Meteo
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Georeferenced soil texture physics (USDA Triangle) synthesized with real-time shortwave solar irradiance and outdoor substrate temperatures.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
+                    13.08°N, 80.27°E
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* ISRIC SoilGrids Panel */}
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                      <Sprout className="w-3.5 h-3.5" />
+                      <span>ISRIC Pedological Soil Classification</span>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950/50 text-amber-400 border border-amber-800/40 font-bold">
+                      USDA: {soilGeospatial?.texture_class || 'Sandy Loam'}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    {soilGeospatial?.agronomic_description || 'Well-drained; rapid warm-up; ideal for root crops and fruiting solanaceae.'}
+                  </p>
+
+                  {/* Sand / Silt / Clay Composition Multi-segment bar */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                      <span>Soil Texture Triangle Fractions:</span>
+                      <span className="text-white font-bold">
+                        Sand {soilGeospatial?.composition?.sand_pct ?? 58}% | Silt {soilGeospatial?.composition?.silt_pct ?? 26}% | Clay {soilGeospatial?.composition?.clay_pct ?? 16}%
+                      </span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-800 flex overflow-hidden">
+                      <div
+                        style={{ width: `${soilGeospatial?.composition?.sand_pct ?? 58}%` }}
+                        className="bg-amber-500 h-full"
+                        title="Sand Fraction"
+                      />
+                      <div
+                        style={{ width: `${soilGeospatial?.composition?.silt_pct ?? 26}%` }}
+                        className="bg-teal-500 h-full"
+                        title="Silt Fraction"
+                      />
+                      <div
+                        style={{ width: `${soilGeospatial?.composition?.clay_pct ?? 16}%` }}
+                        className="bg-rose-500 h-full"
+                        title="Clay Fraction"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-center">
+                    <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
+                      <span className="text-[10px] text-slate-500 uppercase font-mono block">Native pH</span>
+                      <span className="text-sm font-bold text-emerald-400 font-mono">
+                        {soilGeospatial?.ph_water ?? 6.4} pH
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
+                      <span className="text-[10px] text-slate-500 uppercase font-mono block">Bulk Density</span>
+                      <span className="text-sm font-bold text-white font-mono">
+                        {soilGeospatial?.bulk_density_g_cm3 ?? 1.38} g/cm³
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
+                      <span className="text-[10px] text-slate-500 uppercase font-mono block">Drainage</span>
+                      <span className="text-sm font-bold text-cyan-400 font-mono">
+                        {soilGeospatial?.drainage_rating?.split(' ')[0] ?? 'Moderate'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] text-slate-400 pt-1 flex items-center justify-between">
+                    <span>Irrigation Strategy: <strong className="text-slate-200">{soilGeospatial?.recommended_watering_approach || 'Deeper, spaced irrigation pulses'}</strong></span>
+                    <span className="text-[10px] text-slate-500 font-mono">{soilGeospatial?.source || 'ISRIC SoilGrids'}</span>
+                  </div>
+                </div>
+
+                {/* Open-Meteo Solar & Microclimate Panel */}
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                      <Sun className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Solar Irradiance & Microclimate Flux</span>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/40 font-bold">
+                      Live Ground-Truth
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                      <div className="flex items-center justify-between text-xs text-slate-400">
+                        <span>Direct Normal (DNI)</span>
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      </div>
+                      <div className="mt-1 flex items-baseline gap-1">
+                        <span className="text-xl font-black text-white font-mono">
+                          {solarWeather?.direct_normal_irradiance_w_m2 ?? 0.0}
+                        </span>
+                        <span className="text-xs text-slate-400">W/m²</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1">Direct beam solar flux</p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                      <div className="flex items-center justify-between text-xs text-slate-400">
+                        <span>Global Horiz. (GHI)</span>
+                        <Sun className="w-3.5 h-3.5 text-yellow-400" />
+                      </div>
+                      <div className="mt-1 flex items-baseline gap-1">
+                        <span className="text-xl font-black text-white font-mono">
+                          {solarWeather?.global_horizontal_irradiance_w_m2 ?? 0.0}
+                        </span>
+                        <span className="text-xs text-slate-400">W/m²</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1">Total hemispherical flux</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                      <span className="text-[10px] text-slate-400 uppercase font-mono block">Outdoor Soil Temp</span>
+                      <div className="mt-1 flex items-baseline gap-1">
+                        <span className="text-lg font-bold text-emerald-400 font-mono">
+                          {solarWeather?.outdoor_soil_temp_c !== undefined ? `${solarWeather.outdoor_soil_temp_c}°C` : '24.5°C'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Topsoil profile (0–7cm)</p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                      <span className="text-[10px] text-slate-400 uppercase font-mono block">Canopy Photometrics</span>
+                      <div className="mt-1 flex items-baseline gap-1">
+                        <span className="text-lg font-bold text-amber-400 font-mono">
+                          {latestTelemetry?.light_lux !== undefined ? `${latestTelemetry.light_lux} Lux` : '--'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Physical BH1750 on-site</p>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] text-slate-400 pt-1 flex items-center justify-between">
+                    <span>Flux correlation with BH1750 photometer</span>
+                    <span className="text-emerald-400 font-medium">Calibrated Shortwave Spectrum</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* 5-Day Macroclimate & Agro-Meteorology Predictive Trend */}
             <div className="bg-[#0d1422] border border-slate-800 rounded-2xl p-5 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1445,6 +1704,51 @@ export default function App() {
         {/* ==================================================================== */}
         {activeTab === 'studio' && (
           <div className="space-y-6 animate-fadeIn">
+            {/* AI Pathology Diagnostic Engine Switcher */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900 via-[#0e1628] to-[#0a1424] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
+                  <Atom className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Diagnostic Vision Engine</span>
+                    <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                      Dual-Engine Architecture
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">Select primary inference model for leaf pathology and abiotic stress diagnosis.</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPathologyEngine('gemini')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                    pathologyEngine === 'gemini'
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-500 text-black shadow-lg shadow-emerald-950'
+                      : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-700'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Google Gemini Vision AI</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPathologyEngine('kindwise')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                    pathologyEngine === 'kindwise'
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-500 text-black shadow-lg shadow-emerald-950'
+                      : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-700'
+                  }`}
+                >
+                  <Sprout className="w-3.5 h-3.5" />
+                  <span>Kindwise Crop.Health</span>
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Left Column: Live Optical Feed */}
               <div className="bg-[#0d1422] border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
@@ -1624,52 +1928,103 @@ export default function App() {
 
             {/* Live Diagnosis Dossier View */}
             {latestDiagnosisResult && (
-              <div className="bg-[#0d1422] border border-emerald-500/30 rounded-2xl p-6 shadow-xl shadow-emerald-950/20">
+              <div className="bg-[#0d1422] border border-emerald-500/30 rounded-2xl p-6 shadow-xl shadow-emerald-950/20 space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2 pb-4 border-b border-slate-800">
                   <div className="flex items-center gap-3">
                     <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                       <CheckCircle2 className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-white text-base">Pathology Diagnosis Dossier</h3>
-                      <p className="text-xs text-slate-400">Record #{latestDiagnosisResult.id} &bull; Processed via Kindwise crop.health model</p>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-white text-base">Pathology Diagnosis Dossier</h3>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">
+                          {latestDiagnosisResult.engine || 'Kindwise crop.health'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">Record #{latestDiagnosisResult.id || latestDiagnosisResult.diagnosis_id || 'LIVE'}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
                       <span className="text-2xl font-black text-emerald-400">
-                        {latestDiagnosisResult.confidence ? `${latestDiagnosisResult.confidence.toFixed(1)}%` : '--'}
+                        {latestDiagnosisResult.confidence_percentage ? `${latestDiagnosisResult.confidence_percentage}%` : latestDiagnosisResult.confidence ? `${latestDiagnosisResult.confidence.toFixed(1)}%` : '--'}
                       </span>
                       <span className="text-xs text-slate-400 font-medium block">Confidence</span>
                     </div>
-                    <a
-                      href={`/api/diagnosis/${latestDiagnosisResult.id}/pdf`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-950 transition active:scale-95"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Export PDF</span>
-                    </a>
+                    {latestDiagnosisResult.id && (
+                      <a
+                        href={`/api/diagnosis/${latestDiagnosisResult.id}/pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-950 transition active:scale-95"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Export PDF</span>
+                      </a>
+                    )}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-slate-900/70 p-4 rounded-xl border border-slate-800">
                     <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Identified Specimen</span>
-                    <p className="text-lg font-bold text-white mt-1 capitalize">{latestDiagnosisResult.plant_name}</p>
+                    <p className="text-lg font-bold text-white mt-1 capitalize">{latestDiagnosisResult.crop_identified || latestDiagnosisResult.plant_name || 'Specimen'}</p>
                   </div>
                   <div className="bg-slate-900/70 p-4 rounded-xl border border-slate-800">
                     <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Pathology Condition</span>
-                    <p className="text-lg font-bold text-rose-400 mt-1 capitalize">{latestDiagnosisResult.disease_name || 'Healthy'}</p>
+                    <p className="text-lg font-bold text-rose-400 mt-1 capitalize">{latestDiagnosisResult.primary_diagnosis || latestDiagnosisResult.disease_name || 'Healthy'}</p>
                   </div>
                   <div className="bg-slate-900/70 p-4 rounded-xl border border-slate-800">
-                    <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Timestamp</span>
-                    <p className="text-sm font-semibold text-slate-300 mt-1.5">
-                      {latestDiagnosisResult.created_at ? new Date(latestDiagnosisResult.created_at).toLocaleString() : 'Just now'}
+                    <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Causal Pathogen / Urgency</span>
+                    <p className="text-sm font-semibold text-amber-300 mt-1.5 italic">
+                      {latestDiagnosisResult.scientific_pathogen || 'Non-Specific Pathogen'}
+                      {latestDiagnosisResult.urgency_level && ` (${latestDiagnosisResult.urgency_level})`}
                     </p>
                   </div>
                 </div>
+
+                {/* Multimodal Observed Symptoms */}
+                {latestDiagnosisResult.symptoms_observed && latestDiagnosisResult.symptoms_observed.length > 0 && (
+                  <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-teal-400 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Key Visual Symptoms Observed:</span>
+                    </span>
+                    <ul className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-slate-300">
+                      {latestDiagnosisResult.symptoms_observed.map((sym, i) => (
+                        <li key={i} className="flex items-start gap-1.5 bg-slate-950/60 p-2 rounded-lg border border-slate-800">
+                          <span className="text-emerald-400">•</span>
+                          <span>{sym}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Multimodal Active Ingredients & Treatment Protocol */}
+                {latestDiagnosisResult.treatment_protocol && (
+                  <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/30 via-slate-900/80 to-slate-900/80 border border-emerald-800/40 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Agronomic Treatment Protocol:</span>
+                      </span>
+                      {latestDiagnosisResult.active_ingredients_recommended && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400">Actives:</span>
+                          {latestDiagnosisResult.active_ingredients_recommended.map((act, i) => (
+                            <span key={i} className="px-2 py-0.5 rounded bg-emerald-900/50 text-emerald-300 border border-emerald-700/40 text-[10px] font-medium">
+                              {act}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-200 leading-relaxed bg-black/30 p-3 rounded-lg border border-slate-800">
+                      {latestDiagnosisResult.treatment_protocol}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

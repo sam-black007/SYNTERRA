@@ -30,7 +30,10 @@ SYNTERRA is an enterprise-grade IoT and AI-driven precision agriculture platform
    - [Multi-Crop Botanical Profiles](#2-multi-crop-botanical-profiles-smart-species-adaptation)
    - [Daily Light Integral (DLI) & Photoperiod Accumulator](#3-daily-light-integral-dli--photoperiod-accumulator)
    - [Closed-Loop Autonomous Irrigation & Safety Watchdog](#4-closed-loop-autonomous-irrigation-policy)
-   - [AI Leaf Pathology & Clinical Dossiers](#5-ai-computer-vision-leaf-pathology)
+   - [Dual-Engine AI Leaf Pathology (Gemini Multimodal + Kindwise)](#5-dual-engine-ai-computer-vision-leaf-pathology)
+   - [Geospatial Pedology & Soil Science (ISRIC SoilGrids + USDA)](#6-geospatial-pedology--soil-science-isric-soilgrids--usda)
+   - [Authoritative GBIF Biodiversity Taxonomy Verification](#7-authoritative-biodiversity-taxonomy-verification-gbif)
+   - [Solar Irradiance (DNI/GHI) & Microclimate Radiative Flux](#8-solar-irradiance-dnighi--microclimate-radiative-flux-open-meteo)
 8. [System Architecture Flowcharts](#-system-architecture-flowcharts)
 9. [Complete REST API Reference](#-api-reference)
 10. [Troubleshooting & FAQ](#-troubleshooting--faq)
@@ -358,12 +361,53 @@ $$\text{DLI} = \sum_{i} \left( \text{PPFD}_i \times \Delta t_i \right) \times 10
 
 ---
 
-### 5. AI Computer Vision Leaf Pathology
+### 5. Dual-Engine AI Computer Vision Leaf Pathology
 
-1. User uploads a leaf photo or captures a frame from the optical feed.
-2. High-resolution JPEG is dispatched to Kindwise Crop.Health / Gemini API.
-3. Disease identification, probability confidence score, and crop species are returned.
-4. An official **Clinical Pathology Dossier PDF** is generated on demand (`/api/diagnosis/<id>/pdf`) detailing active chemical ingredients, organic treatments, and agronomic management advice.
+SYNTERRA features an enterprise dual-inference architecture allowing users to dynamically select between deep botanical models and state-of-the-art multimodal vision foundation models:
+
+* **Engine A: Google Gemini Multimodal Vision API (`gemini-3.8-flash` / `gemini-flash-latest`):**
+  * Parses high-resolution macroscopic foliage imagery directly with domain prompts for biological pathogens (*Alternaria*, *Septoria*, *Phytophthora*) and abiotic nutritional deficiencies (*Iron Chlorosis*, *Blossom End Rot / Calcium Deficit*).
+  * Returns structured JSON: primary diagnosis, confidence percentage, list of key visual symptoms, differential diagnoses, active biochemical ingredients (*Copper Octanoate*, *Bacillus subtilis*, *Mancozeb*), and step-by-step clinical remediation protocols.
+  * Resilient fallback cascade to local agronomic rule engine if external rate limits occur.
+* **Engine B: Kindwise Crop.Health API:**
+  * Specialized botanical neural network trained on millions of agricultural specimens, delivering rapid classification of infectious foliar lesions.
+* **Clinical PDF Dossier Generator:** Exports printable diagnostic dossiers (`/api/diagnosis/<id>/pdf`) detailing chemical MOAs (Modes of Action), safety intervals, and integrated pest management (IPM) practices.
+
+---
+
+### 6. Geospatial Pedology & Soil Science (ISRIC SoilGrids + USDA)
+
+SYNTERRA integrates georeferenced pedological data from the **ISRIC SoilGrids World Soil Information REST API**, mapped through the official **USDA Soil Texture Triangle**:
+
+* **Mathematical Texture Classification:** Determines soil classification (*Sandy Loam*, *Clay Loam*, *Silt Loam*, etc.) using fractional ternary boundaries:
+  $$	ext{Sand \%} + 	ext{Silt \%} + 	ext{Clay \%} = 100\%$$
+* **Pedological Substrate Parameters:**
+  * Native Substrate pH in Water ($pH_{	ext{H}_2	ext{O}}$) & category rating (*Slightly Acidic / Optimal Bioavailability*).
+  * Bulk density ($g/cm^3$) indicating rhizosphere compaction and aeration.
+  * Natural drainage capacity and customized substrate watering strategies (*deeper, spaced irrigation pulses vs. frequent shallow wetting*).
+* **Automatic Regional Fallback:** Smooth fallback to regional pedological models ensures zero-downtime operation even during SoilGrids server maintenance.
+
+---
+
+### 7. Authoritative Biodiversity Taxonomy Verification (GBIF)
+
+To prevent misidentification and ensure botanical rigour, SYNTERRA cross-verifies all monitored crops against the **Global Biodiversity Information Facility (GBIF) Backbone Taxonomy**:
+
+* **GBIF Species Match API Integration (`https://api.gbif.org/v1/species/match`):** Resolves canonical botanical binomials (*Solanum lycopersicum L.*, *Ocimum basilicum L.*) in real time.
+* **Full Phylogenetic Tree:** Ingests and renders complete taxonomic hierarchies:
+  $$	ext{Kingdom} 	o 	ext{Phylum} 	o 	ext{Class} 	o 	ext{Order} 	o 	ext{Family} 	o 	ext{Genus} 	o 	ext{Species}$$
+* **Authoritative Attribution:** Displays official GBIF Usage Keys, verification status (`ACCEPTED`), and match confidence scores directly in the Botanical Target banner.
+
+---
+
+### 8. Solar Irradiance (DNI/GHI) & Microclimate Radiative Flux (Open-Meteo)
+
+SYNTERRA correlates ambient photometric Lux measured by the on-site BH1750 with global shortwave radiative models via **Open-Meteo Solar Radiation Reanalysis**:
+
+* **Direct Normal Irradiance (DNI in $W/m^2$):** Measures direct beam solar flux perpendicular to the sun's rays.
+* **Global Horizontal Irradiance (GHI in $W/m^2$):** Quantifies total hemispherical solar radiation incident on a horizontal surface.
+* **Outdoor Topsoil Temperature ($^\circ C$):** Substrate temperature at 0–7 cm depth from atmospheric boundary models.
+* **Hardware Cross-Validation:** Compares outdoor solar flux against canopy Lux, providing actionable intelligence on greenhouse shading transmission efficiency and cloud cover attenuation.
 
 ---
 
@@ -441,6 +485,37 @@ flowchart TD
     PDF_GEN --> PDF_OUT["Downloadable Dossier Document"]
 ```
 
+#### Flowchart 5: Multi-Source Geospatial & Multimodal AI Ingestion Pipeline
+
+```mermaid
+flowchart LR
+    subgraph External_APIs ["External Scientific & AI APIs"]
+        GBIF["GBIF Backbone API<br/>Canonical Taxonomy"]
+        SOIL["ISRIC SoilGrids API<br/>Sand/Silt/Clay & pH"]
+        METEO["Open-Meteo API<br/>DNI/GHI Solar Flux & Soil Temp"]
+        GEMINI["Google Gemini Vision API<br/>Zero-Shot Multimodal Pathology"]
+    end
+
+    subgraph Backend_Services ["SYNTERRA Python Microservices"]
+        G_SVC["GBIF Service<br/>Taxonomy Resolution"]
+        S_SVC["Soil Geospatial Service<br/>USDA Texture Triangle Classifier"]
+        W_SVC["Weather Service<br/>Solar Radiative Normalization"]
+        M_SVC["Multimodal Vision Service<br/>Pathogen & Treatment Protocol"]
+    end
+
+    subgraph Live_UI ["SYNTERRA React 18 Console"]
+        UI_GBIF["Botanical Taxonomy Strip<br/>(Family, Genus, Species, Key)"]
+        UI_SOIL["Geospatial Pedology Card<br/>(Texture Bar, Bulk Density, Drainage)"]
+        UI_SOLAR["Solar Irradiance Card<br/>(DNI / GHI W/m² vs Canopy Lux)"]
+        UI_DIAG["Dual-Engine Pathology Studio<br/>(Visual Symptoms & Active Chemicals)"]
+    end
+
+    GBIF --> G_SVC --> UI_GBIF
+    SOIL --> S_SVC --> UI_SOIL
+    METEO --> W_SVC --> UI_SOLAR
+    GEMINI --> M_SVC --> UI_DIAG
+```
+
 ---
 
 ## 📡 API Reference
@@ -456,6 +531,10 @@ flowchart TD
 | `/api/sensors/history` | `GET` | &mdash; | Historical telemetry records (`?limit=50`) |
 | `/api/sensors/export/csv`| `GET` | &mdash; | Export complete sensor history as CSV |
 | `/api/diagnose` | `POST` | &mdash; | Upload leaf photo &rarr; Kindwise Crop.Health disease detection |
+| `/api/diagnose/multimodal`| `POST`| &mdash; | **Google Gemini Multimodal AI leaf pathology & active ingredients** |
+| `/api/soil/geospatial` | `GET` | &mdash; | **Query ISRIC SoilGrids for USDA soil texture, pH & drainage** |
+| `/api/biodiversity/species`| `GET` | &mdash; | **Query GBIF for authoritative botanical taxonomic hierarchy** |
+| `/api/weather/solar` | `GET` | &mdash; | **Query Open-Meteo for Direct Normal & Global Solar Irradiance** |
 | `/api/diagnoses` | `GET` | &mdash; | List all historical pathology diagnoses |
 | `/api/diagnosis/<id>/pdf`| `GET` | &mdash; | **Download Official PDF Pathology Dossier with Treatment Plan** |
 | `/api/irrigation/status` | `GET` | &mdash; | Read solenoid pump state, countdown & safety interlocks |

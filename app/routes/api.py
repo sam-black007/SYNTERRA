@@ -1,5 +1,6 @@
 import io
 import csv
+import json
 import base64
 from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request, current_app, Response
@@ -10,6 +11,9 @@ from app.services.plantid_client import PlantIdClient
 from app.services.irrigation_controller import irrigation_manager
 from app.services.camera_service import camera_service
 from app.services.weather_service import weather_service
+from app.services.soil_geospatial_service import soil_geospatial_service
+from app.services.gbif_service import gbif_service
+from app.services.multimodal_vision_service import multimodal_vision_service
 
 api_bp = Blueprint('api', __name__)
 
@@ -871,6 +875,98 @@ def chat_suggestions():
         'suggestions': suggestions,
         'context': context
     }), 200
+
+
+# ============================================================================
+# Advanced Geospatial, Biodiversity, Solar & Multimodal AI APIs
+# ============================================================================
+
+@api_bp.route('/soil/geospatial', methods=['GET'])
+def get_soil_geospatial():
+    """Query ISRIC SoilGrids for native soil texture, pH, bulk density & drainage capacity."""
+    try:
+        lat = float(request.args.get('lat', 13.0827))
+        lon = float(request.args.get('lon', 80.2707))
+    except (ValueError, TypeError):
+        lat, lon = 13.0827, 80.2707
+    profile = soil_geospatial_service.get_soil_profile(lat, lon)
+    return jsonify(profile), 200
+
+
+@api_bp.route('/biodiversity/species', methods=['GET'])
+def get_biodiversity_species():
+    """Query Global Biodiversity Information Facility (GBIF) for canonical taxonomy."""
+    query_name = request.args.get('name', '').strip()
+    if not query_name:
+        # Default to current active crop name
+        crop = CROP_PROFILES.get(ACTIVE_CROP_KEY, CROP_PROFILES['tomato'])
+        query_name = crop.get('scientific_name', 'Solanum lycopersicum')
+    result = gbif_service.match_species(query_name)
+    return jsonify(result), 200
+
+
+@api_bp.route('/weather/solar', methods=['GET'])
+def get_solar_weather():
+    """Query Open-Meteo for real-time solar irradiance (DNI, GHI) and outdoor soil temperature."""
+    try:
+        lat = float(request.args.get('lat', 13.0827)) if request.args.get('lat') else None
+        lon = float(request.args.get('lon', 80.2707)) if request.args.get('lon') else None
+    except (ValueError, TypeError):
+        lat, lon = None, None
+    solar = weather_service.fetch_solar_radiation(lat, lon)
+    return jsonify(solar), 200
+
+
+@api_bp.route('/diagnose/multimodal', methods=['POST'])
+def diagnose_multimodal():
+    """Multimodal Vision AI diagnosis analyzing biological diseases & abiotic nutritional disorders."""
+    image_bytes = None
+    filename = "leaf.jpg"
+    plant_name = request.form.get('plant_name') or request.args.get('plant_name') or "Specimen"
+
+    if 'image' in request.files:
+        file = request.files['image']
+        if file.filename:
+            filename = file.filename
+        image_bytes = file.read()
+    else:
+        payload = request.get_json(silent=True) or {}
+        b64 = payload.get('image_base64')
+        if b64:
+            if ',' in b64:
+                b64 = b64.split(',', 1)[1]
+            image_bytes = base64.b64decode(b64)
+            plant_name = payload.get('plant_name', plant_name)
+
+    if not image_bytes:
+        return jsonify({
+            'success': False,
+            'error': 'NO_IMAGE',
+            'message': 'No leaf image provided for multimodal diagnosis'
+        }), 400
+
+    result = multimodal_vision_service.diagnose_image(image_bytes, filename=filename, crop_context=plant_name)
+
+    # Persist in SQLite Diagnosis log
+    try:
+        diag = Diagnosis(
+            plant_name=result.get('crop_identified', plant_name),
+            disease_name=result.get('primary_diagnosis', 'Healthy / No Disease Detected'),
+            confidence=float(result.get('confidence_percentage', 85)),
+            image_url=filename,
+            raw_response=json.dumps(result)[:5000],
+        )
+        db.session.add(diag)
+        db.session.commit()
+        try:
+            socketio.emit('diagnosis_update', diag.to_dict())
+        except Exception as e:
+            current_app.logger.warning(f"SocketIO diagnosis emit warning: {e}")
+        result['diagnosis_id'] = diag.id
+    except Exception as e:
+        current_app.logger.error(f"Error saving multimodal diagnosis: {e}")
+
+    return jsonify(result), 200
 
 
 
