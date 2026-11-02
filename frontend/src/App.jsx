@@ -32,8 +32,11 @@ import {
   CloudSun,
   CloudLightning,
   MapPin,
-  Wind
+  Wind,
+  ShieldAlert,
+  Bot
 } from 'lucide-react';
+import ChatbotWidget from './components/ChatbotWidget';
 import {
   ResponsiveContainer,
   LineChart,
@@ -800,13 +803,15 @@ export default function App() {
                     <div
                       key={day.date}
                       className={`p-3 rounded-xl border flex flex-col justify-between transition hover:border-slate-700 ${
-                        idx === 0 ? 'bg-slate-900/90 border-slate-700/80 shadow-md ring-1 ring-emerald-500/20' : 'bg-slate-900/40 border-slate-800/80'
+                        idx === 0
+                          ? 'bg-gradient-to-b from-slate-900 via-slate-900/90 to-[#0a1724] border-teal-500/30 shadow-lg ring-1 ring-teal-500/20'
+                          : 'bg-slate-900/40 border-slate-800/80 hover:bg-slate-900/60'
                       }`}
                     >
                       <div>
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-xs text-white">
-                            {idx === 0 ? 'Today' : day.day_name}
+                          <span className={`font-bold text-xs ${idx === 0 ? 'text-teal-300' : 'text-white'}`}>
+                            {idx === 0 ? 'Today (Live)' : day.day_name}
                           </span>
                           <span className="text-[10px] font-mono text-slate-500">{day.date_display}</span>
                         </div>
@@ -815,33 +820,44 @@ export default function App() {
                           {renderWeatherIcon(day.category)}
                           <div className="truncate">
                             <p className="text-xs font-semibold text-slate-200 truncate">{day.condition}</p>
-                            <p className="text-[10px] text-slate-400">{day.temp_min}°C – {day.temp_max}°C</p>
+                            <p className="text-[10px] text-slate-400 font-mono">{day.temp_min}°C &ndash; {day.temp_max}°C</p>
                           </div>
                         </div>
                       </div>
 
-                      <div className="space-y-1.5 pt-2 border-t border-slate-800/80 text-[10px]">
-                        <div className="flex items-center justify-between text-slate-400">
-                          <span className="flex items-center gap-1">
-                            <Droplets className="w-3 h-3 text-cyan-400" />
-                            <span>Rain:</span>
-                          </span>
-                          <span className="font-mono font-bold text-slate-200">{day.precip_prob}%</span>
+                      <div className="space-y-2 pt-2 border-t border-slate-800/80 text-[10px]">
+                        <div>
+                          <div className="flex items-center justify-between text-slate-400 mb-1">
+                            <span className="flex items-center gap-1">
+                              <Droplets className="w-3 h-3 text-cyan-400" />
+                              <span>Rain Prob:</span>
+                            </span>
+                            <span className="font-mono font-bold text-slate-200">{day.precip_prob}%</span>
+                          </div>
+                          {/* Mini Progress Bar */}
+                          <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                day.precip_prob >= 60 ? 'bg-cyan-400' : day.precip_prob >= 30 ? 'bg-teal-400' : 'bg-slate-600'
+                              }`}
+                              style={{ width: `${Math.max(5, day.precip_prob)}%` }}
+                            />
+                          </div>
                         </div>
 
                         <div className="flex items-center justify-between text-slate-400">
-                          <span>Humidity:</span>
+                          <span>Mean Humidity:</span>
                           <span className="font-mono text-slate-300">{day.humidity_pct}%</span>
                         </div>
 
-                        <div className={`mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded text-center border ${
+                        <div className={`mt-1 text-[9px] font-bold px-2 py-0.5 rounded-md text-center border uppercase tracking-wider ${
                           day.risk_level === 'HIGH'
                             ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
                             : day.risk_level === 'MODERATE'
                             ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
                             : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
                         }`}>
-                          {day.risk_level} RISK
+                          {day.risk_level === 'HIGH' ? 'Elevated Spore Risk' : day.risk_level === 'MODERATE' ? 'Moderate Risk' : 'Optimal Vector'}
                         </div>
                       </div>
                     </div>
@@ -854,27 +870,99 @@ export default function App() {
                 </div>
               )}
 
-              {/* Agronomic Advisory Callout */}
+              {/* Agro-Meteorological Vector & Tactical Advisory Panel */}
               {weatherData && (
-                <div className={`p-3.5 rounded-xl border text-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-3 ${
-                  weatherData.overall_risk === 'HIGH'
-                    ? 'bg-rose-950/20 border-rose-500/30 text-rose-200'
-                    : weatherData.overall_risk === 'MODERATE'
-                    ? 'bg-amber-950/20 border-amber-500/30 text-amber-200'
-                    : 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
-                }`}>
-                  <div className="flex items-start gap-2.5">
-                    <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${
-                      weatherData.overall_risk === 'HIGH' ? 'text-rose-400' : weatherData.overall_risk === 'MODERATE' ? 'text-amber-400' : 'text-emerald-400'
-                    }`} />
-                    <p className="leading-relaxed">
-                      <span className="font-bold">Agro-Weather Advisory: </span>
-                      {weatherData.overall_advisory}
-                    </p>
+                <div className="rounded-xl border border-slate-800/90 bg-gradient-to-b from-[#0c1524]/90 to-[#080e18]/95 p-4 space-y-3.5 shadow-xl">
+                  {/* Top Header of Advisory Panel */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-800/80">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`p-1.5 rounded-lg border ${
+                        weatherData.overall_risk === 'HIGH'
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                          : weatherData.overall_risk === 'MODERATE'
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                      }`}>
+                        <ShieldAlert className="w-4 h-4" />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold text-white tracking-wide">
+                          {weatherData.advisory_title || "Pathogen Vector Intelligence"}
+                        </span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                          weatherData.overall_risk === 'HIGH'
+                            ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                            : weatherData.overall_risk === 'MODERATE'
+                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                        }`}>
+                          {weatherData.pathogen_pressure || `${weatherData.overall_risk} Risk Profile`}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono font-medium px-2.5 py-1 rounded-lg bg-teal-950/40 border border-teal-700/40 text-teal-300 flex items-center gap-1.5">
+                        <Droplets className="w-3 h-3 text-teal-400" />
+                        <span>{weatherData.irrigation_directive || weatherData.irrigation_recommendation}</span>
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-black/40 border border-slate-700 text-teal-300 shrink-0 font-mono">
-                    {weatherData.irrigation_recommendation}
-                  </span>
+
+                  {/* Two Column Structured Body */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 text-xs">
+                    {/* Left Column: Canopy Vector Analysis */}
+                    <div className="md:col-span-6 p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-2">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
+                        <span className="flex items-center gap-1.5 text-slate-300">
+                          <Activity className="w-3.5 h-3.5 text-teal-400" />
+                          <span>Epidemiological Impact</span>
+                        </span>
+                        <span className="text-slate-500 font-mono text-[10px]">5-Day Synthesis</span>
+                      </div>
+                      <p className="text-slate-300 leading-relaxed text-xs">
+                        {weatherData.executive_summary || weatherData.overall_advisory}
+                      </p>
+                      {weatherData.canopy_dynamics && (
+                        <div className="pt-2 border-t border-slate-800/70 flex items-center gap-2 text-[11px] text-slate-400">
+                          <span className="text-teal-400 font-medium shrink-0">Canopy Dynamics:</span>
+                          <span className="text-slate-300">{weatherData.canopy_dynamics}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right Column: Prescriptive Field Protocols */}
+                    <div className="md:col-span-6 p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-2">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
+                        <span className="flex items-center gap-1.5 text-slate-300">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Actionable Field Directives</span>
+                        </span>
+                        <span className="text-[10px] text-emerald-400 font-medium">Priority</span>
+                      </div>
+                      <ul className="space-y-1.5 text-xs text-slate-300">
+                        {(weatherData.action_items && weatherData.action_items.length > 0) ? (
+                          weatherData.action_items.map((item, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-[11px] leading-snug">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1 shrink-0" />
+                              <span>{item}</span>
+                            </li>
+                          ))
+                        ) : (
+                          <>
+                            <li className="flex items-start gap-2 text-[11px] leading-snug">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1 shrink-0" />
+                              <span>Regulate automated drip cycles based on ambient rain accumulation.</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-[11px] leading-snug">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1 shrink-0" />
+                              <span>Ensure active horizontal airflow to accelerate morning leaf drying.</span>
+                            </li>
+                          </>
+                        )}
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1389,6 +1477,13 @@ export default function App() {
         <span>SYNTERRA &mdash; Engineering Intelligence for a Growing World.</span>
         <span>Kindwise crop.health v1 API &bull; ESP32-S3 Firmware &bull; SQLite Architecture</span>
       </footer>
+
+      {/* AI Senior Agronomist Botanical Copilot */}
+      <ChatbotWidget
+        liveTelemetry={liveTelemetry}
+        weatherData={weatherData}
+        latestDiagnosis={diagnoses && diagnoses.length > 0 ? diagnoses[0] : null}
+      />
     </div>
   );
 }

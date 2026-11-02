@@ -581,3 +581,40 @@ def refresh_weather_forecast():
     return jsonify(forecast_data), 200
 
 
+# ============================================================================
+# AI Agronomist & Botanical Copilot Chatbot
+# ============================================================================
+
+@api_bp.route('/chat', methods=['POST'])
+def chat():
+    """Interactive agronomic consulting endpoint with live microclimate & pathology context."""
+    from app.services.chatbot_service import chatbot_service
+    data = request.get_json() or {}
+    message = data.get('message', '').strip()
+    history = data.get('history', [])
+
+    if not message:
+        return jsonify({
+            'success': False,
+            'error': 'EMPTY_MESSAGE',
+            'reply': 'Please provide an agronomic question or request.'
+        }), 400
+
+    response = chatbot_service.ask(message, conversation_history=history)
+    return jsonify(response), 200
+
+
+@api_bp.route('/chat/suggestions', methods=['GET'])
+def chat_suggestions():
+    """Retrieve dynamic, context-aware prompt suggestions."""
+    from app.services.chatbot_service import chatbot_service
+    suggestions = chatbot_service.get_smart_suggestions()
+    context = chatbot_service.get_context_snapshot()
+    return jsonify({
+        'success': True,
+        'suggestions': suggestions,
+        'context': context
+    }), 200
+
+
+

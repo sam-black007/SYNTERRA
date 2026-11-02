@@ -168,26 +168,65 @@ class WeatherService:
                 high_risk_days = sum(1 for d in forecast_days if d['risk_level'] == 'HIGH')
 
                 if high_risk_days >= 2 or avg_rain_prob >= 60:
-                    overall_advisory = (
-                        "CRITICAL AGRO-WEATHER ALERT: Multi-day persistent precipitation and high humidity "
-                        "exceeding 75% forecasted. Prime conditions for Early Blight, Late Blight, and Downy Mildew. "
-                        "Action: Withhold automated irrigation, enhance greenhouse ventilation, and apply prophylactic copper bactericide/fungicide."
-                    )
                     overall_risk = "HIGH"
-                    irrigation_recommendation = "SUSPEND AUTOMATED IRRIGATION (High rainfall expected)"
-                elif avg_rain_prob >= 35:
+                    advisory_title = "Elevated Pathogen Vector Alert"
+                    executive_summary = (
+                        "Multi-day persistent precipitation and ambient relative humidity exceeding 75% create "
+                        "favorable incubation windows for foliar fungal pathogens (Early Blight, Late Blight, and Downy Mildew)."
+                    )
+                    pathogen_pressure = "Elevated (Spore incubation index: 8.4 / 10)"
+                    canopy_dynamics = "Extended foliar wetness duration (>14 hrs/day); suppressed stomatal transpiration."
+                    irrigation_directive = "Suspend automated drip irrigation (Precipitation offset active)"
+                    action_items = [
+                        "Suspend automated drip cycles to prevent root-zone waterlogging and hypoxia.",
+                        "Enhance greenhouse ventilation and canopy air movement to reduce boundary-layer humidity.",
+                        "Apply prophylactic bio-fungicide (Copper Octanoate or Bacillus subtilis) ahead of rain events.",
+                        "Inspect lower canopy foliage daily for early sporulation lesions."
+                    ]
                     overall_advisory = (
-                        "MODERATE ADVISORY: Intermittent showers expected across the 5-day window. "
+                        "Persistent precipitation and high ambient humidity (>75%) elevate foliar pathogen incubation risks. "
+                        "Suspend automated irrigation to prevent root hypoxia, optimize ventilation, and apply prophylactic bio-fungicide."
+                    )
+                    irrigation_recommendation = "SUSPEND AUTOMATED IRRIGATION"
+                elif avg_rain_prob >= 35 or high_risk_days >= 1:
+                    overall_risk = "MODERATE"
+                    advisory_title = "Moderate Microclimate Advisory"
+                    executive_summary = (
+                        "Intermittent precipitation and moderate humidity cycles detected across the 5-day window. "
+                        "Localized microclimate monitoring recommended to prevent sporadic fungal sporulation."
+                    )
+                    pathogen_pressure = "Moderate (Incubation index: 5.2 / 10)"
+                    canopy_dynamics = "Intermittent foliar wetness; variable VPD conditions."
+                    irrigation_directive = "Throttle drip cycles by 30-40% based on substrate sensors"
+                    action_items = [
+                        "Calibrate drip irrigation cycles to match ambient precipitation offset.",
+                        "Monitor substrate moisture sensors closely to avoid over-saturation.",
+                        "Ensure morning canopy drying by maintaining horizontal airflow fans."
+                    ]
+                    overall_advisory = (
+                        "Intermittent showers expected across the 5-day window. "
                         "Monitor soil saturation levels closely and calibrate drip cycles to avoid root-zone hypoxia."
                     )
-                    overall_risk = "MODERATE"
                     irrigation_recommendation = "REDUCE DRIP IRRIGATION BY 30%"
                 else:
-                    overall_advisory = (
-                        "EXCELLENT GROWING CONDITIONS: Mild, stable macroclimate forecasted. High solar irradiance "
-                        "will encourage strong vegetative transpiration. Maintain scheduled baseline irrigation."
-                    )
                     overall_risk = "LOW"
+                    advisory_title = "Optimal Agronomic Microclimate"
+                    executive_summary = (
+                        "Stable atmospheric conditions forecasted with moderate humidity and high solar irradiance. "
+                        "Foliar pathogen incubation probability remains low."
+                    )
+                    pathogen_pressure = "Minimal (Incubation index: 1.8 / 10)"
+                    canopy_dynamics = "Optimal stomatal conductance and vegetative transpiration expected."
+                    irrigation_directive = "Maintain standard automated irrigation schedule"
+                    action_items = [
+                        "Maintain scheduled baseline fertigation and irrigation regimes.",
+                        "Monitor midday canopy VPD to ensure adequate transpiration cooling.",
+                        "Routine preventative scouting recommended."
+                    ]
+                    overall_advisory = (
+                        "Mild, stable macroclimate forecasted. High solar irradiance will encourage strong vegetative "
+                        "transpiration. Maintain scheduled baseline irrigation."
+                    )
                     irrigation_recommendation = "MAINTAIN REGULAR IRRIGATION SCHEDULE"
 
                 result = {
@@ -196,6 +235,12 @@ class WeatherService:
                     'fetched_at': time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
                     'forecast': forecast_days,
                     'overall_risk': overall_risk,
+                    'advisory_title': advisory_title,
+                    'executive_summary': executive_summary,
+                    'pathogen_pressure': pathogen_pressure,
+                    'canopy_dynamics': canopy_dynamics,
+                    'irrigation_directive': irrigation_directive,
+                    'action_items': action_items,
                     'overall_advisory': overall_advisory,
                     'irrigation_recommendation': irrigation_recommendation
                 }
@@ -247,6 +292,16 @@ class WeatherService:
             'fetched_at': time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
             'forecast': forecast_days,
             'overall_risk': "MODERATE",
+            'advisory_title': "Moderate Microclimate Advisory",
+            'executive_summary': "Intermittent precipitation detected. Monitor substrate saturation levels and maintain adequate canopy airflow.",
+            'pathogen_pressure': "Moderate (Incubation index: 4.8 / 10)",
+            'canopy_dynamics': "Variable boundary-layer humidity; monitor lower leaf wetness.",
+            'irrigation_directive': "Throttle drip irrigation cycles by 20-30%",
+            'action_items': [
+                "Adjust automated irrigation to prevent excessive root-zone saturation.",
+                "Maintain greenhouse circulation fans during high humidity intervals.",
+                "Conduct routine foliar visual inspections."
+            ],
             'overall_advisory': "Intermittent showers expected. Keep soil saturation monitored and regulate greenhouse airflow.",
             'irrigation_recommendation': "REDUCE DRIP IRRIGATION BY 20%",
             'is_fallback': True
