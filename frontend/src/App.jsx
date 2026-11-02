@@ -192,7 +192,7 @@ export default function App() {
     };
   }, []);
 
-  const fetchInitialData = async () => {
+  async function fetchInitialData() {
     try {
       const [telemRes, histRes, diagRes, integRes, irrigRes] = await Promise.all([
         fetch('/api/sensors/latest'),
@@ -1480,7 +1480,7 @@ export default function App() {
 
       {/* AI Senior Agronomist Botanical Copilot */}
       <ChatbotWidget
-        liveTelemetry={liveTelemetry}
+        latestTelemetry={latestTelemetry}
         weatherData={weatherData}
         latestDiagnosis={diagnoses && diagnoses.length > 0 ? diagnoses[0] : null}
       />

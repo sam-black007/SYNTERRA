@@ -2,20 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Bot,
   Send,
-  X,
   Sparkles,
   Minimize2,
   Trash2,
   Thermometer,
   Droplets,
   Sprout,
-  ShieldAlert,
-  Activity,
-  ChevronRight,
-  RefreshCw
+  ChevronRight
 } from 'lucide-react';
 
-// Lightweight Markdown Formatter
+// Lightweight Markdown Formatter for Agronomic Advice
 function MarkdownText({ content }) {
   if (!content) return null;
 
@@ -49,12 +45,8 @@ function MarkdownText({ content }) {
   };
 
   const renderInline = (text) => {
-    // Process bold, code, and italic
     const parts = [];
-    let remaining = text;
     let keyIdx = 0;
-
-    // Simple regex scanner for **bold**, `code`, *italic*
     const inlineRegex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
     let match;
     let lastIndex = 0;
@@ -153,15 +145,35 @@ function MarkdownText({ content }) {
   return <div className="space-y-0.5">{elements}</div>;
 }
 
-export default function ChatbotWidget({ liveTelemetry, weatherData, latestDiagnosis }) {
+// Error Boundary Wrapper to Prevent Any Child Failure from Impacting Dashboard
+class ChatbotErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.warn('Chatbot widget error suppressed:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return null;
+    }
+    return this.props.children;
+  }
+}
+
+function ChatbotWidgetContent({ latestTelemetry, liveTelemetry, weatherData, latestDiagnosis }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
       id: 'init-1',
       sender: 'bot',
-      text: "### 🌿 Welcome to Synterra Botanical Copilot\nI am your AI Senior Agronomist, synced to your live canopy telemetry, plant pathology diagnostics, and hyper-local 5-day weather models.\n\nHow can I assist your crop management today?",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      source: 'synterra_botanical_engine'
+      text: "### 🌿 Welcome to Synterra Botanical Copilot\nI am your AI Senior Agronomist (TerraAI), synced to your live canopy telemetry, plant pathology diagnostics, and hyper-local 5-day weather models.\n\nHow can I assist your crop management today?",
+      timestamp: 'Live',
+      source: 'gemini_pro_agronomist'
     }
   ]);
   const [input, setInput] = useState('');
@@ -176,6 +188,24 @@ export default function ChatbotWidget({ liveTelemetry, weatherData, latestDiagno
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Hoisted Fetch Suggestions
+  async function fetchSuggestions() {
+    try {
+      const res = await fetch('/api/chat/suggestions');
+      const data = await res.json();
+      if (data.success) {
+        if (data.suggestions && data.suggestions.length > 0) {
+          setSuggestions(data.suggestions);
+        }
+        if (data.context) {
+          setTelemetrySnapshot(data.context);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load chat suggestions:', e);
+    }
+  }
 
   // Fetch contextual suggestions on mount
   useEffect(() => {
@@ -195,23 +225,6 @@ export default function ChatbotWidget({ liveTelemetry, weatherData, latestDiagno
       setTimeout(() => inputRef.current?.focus(), 150);
     }
   }, [isOpen]);
-
-  const fetchSuggestions = async () => {
-    try {
-      const res = await fetch('/api/chat/suggestions');
-      const data = await res.json();
-      if (data.success) {
-        if (data.suggestions && data.suggestions.length > 0) {
-          setSuggestions(data.suggestions);
-        }
-        if (data.context) {
-          setTelemetrySnapshot(data.context);
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to load chat suggestions:', err);
-    }
-  };
 
   const handleSend = async (messageText = null) => {
     const textToSend = (messageText || input).trim();
@@ -265,19 +278,18 @@ export default function ChatbotWidget({ liveTelemetry, weatherData, latestDiagno
           }
         ]);
       }
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
           id: `bot-err-${Date.now()}`,
           sender: 'bot',
-          text: "⚠️ **Connection Error:** Unable to reach the SYNTERRA Agronomy Engine. Ensure the backend daemon is running.",
+          text: "⚠️ **Connection Notice:** Unable to reach the SYNTERRA Agronomy Engine. Ensure the backend daemon is running.",
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
     } finally {
       setIsLoading(false);
-      // Refresh suggestions after query
       fetchSuggestions();
     }
   };
@@ -296,17 +308,17 @@ export default function ChatbotWidget({ liveTelemetry, weatherData, latestDiagno
         sender: 'bot',
         text: "### 🌿 Conversation Reset\nAgronomic session cleared. I am ready with live canopy telemetry and 5-day predictive forecasts.",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        source: 'synterra_botanical_engine'
+        source: 'gemini_pro_agronomist'
       }
     ]);
   };
 
-  // Derive display values from live props or cached context
-  const curTemp = liveTelemetry?.temperature ?? telemetrySnapshot?.telemetry?.temperature_c ?? 22.4;
-  const curRH = liveTelemetry?.humidity ?? telemetrySnapshot?.telemetry?.humidity_pct ?? 68.0;
-  const curSoil = liveTelemetry?.soilMoisture ?? telemetrySnapshot?.telemetry?.soil_moisture_pct ?? 58.0;
+  // Derive display values safely from either latestTelemetry or fallback snapshot
+  const telem = latestTelemetry || liveTelemetry;
+  const curTemp = telem?.temperature_c ?? telem?.temperature ?? telemetrySnapshot?.telemetry?.temperature_c ?? 22.4;
+  const curRH = telem?.humidity_pct ?? telem?.humidity ?? telemetrySnapshot?.telemetry?.humidity_pct ?? 68.0;
+  const curSoil = telem?.soil_moisture_pct ?? telem?.soilMoisture ?? telemetrySnapshot?.telemetry?.soil_moisture_pct ?? 58.0;
   const curRisk = weatherData?.overall_risk ?? telemetrySnapshot?.weather?.overall_risk ?? 'MODERATE';
-  const curDisease = latestDiagnosis?.disease_name ?? telemetrySnapshot?.diagnosis?.disease_name ?? 'Early Blight';
 
   return (
     <div className="fixed bottom-5 right-5 z-50">
@@ -455,7 +467,7 @@ export default function ChatbotWidget({ liveTelemetry, weatherData, latestDiagno
                     <>
                       <span>•</span>
                       <span className="text-teal-400 font-mono">
-                        {msg.source === 'gemini_pro_agronomist' ? 'Gemini 1.5 Pro' : 'Botanical Core'}
+                        {msg.source.includes('gemini') ? 'Gemini 3.5 Flash' : 'Botanical Core'}
                       </span>
                     </>
                   )}
@@ -472,7 +484,7 @@ export default function ChatbotWidget({ liveTelemetry, weatherData, latestDiagno
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '150ms' }} />
                     <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
-                  <span className="text-[11px] text-slate-400 italic">Agronomist evaluating microclimate & pathology vector...</span>
+                  <span className="text-[11px] text-slate-400 italic">TerraAI evaluating microclimate & pathology vector...</span>
                 </div>
               </div>
             )}
@@ -510,5 +522,13 @@ export default function ChatbotWidget({ liveTelemetry, weatherData, latestDiagno
         </div>
       )}
     </div>
+  );
+}
+
+export default function ChatbotWidget(props) {
+  return (
+    <ChatbotErrorBoundary>
+      <ChatbotWidgetContent {...props} />
+    </ChatbotErrorBoundary>
   );
 }
