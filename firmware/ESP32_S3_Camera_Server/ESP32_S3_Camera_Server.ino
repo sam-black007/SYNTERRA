@@ -31,6 +31,8 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
+#include <Wire.h>
+#include <BH1750.h>
 #include "esp_timer.h"
 #include "img_converters.h"
 #include "fb_gfx.h"
@@ -59,6 +61,29 @@ const char* fallback_server_ip = "192.168.137.10";
 
 unsigned long lastAnnounceTime = 0;
 const unsigned long announceInterval = 30000; // Heartbeat announce every 30s
+
+BH1750 lightMeter;
+bool bh1750_found = false;
+unsigned long lastLuxTime = 0;
+const unsigned long luxInterval = 20000;      // Telemetry update every 20s
+
+void sendLuxToSynterra(float lux) {
+  if (WiFi.status() != WL_CONNECTED) return;
+  IPAddress gateway = WiFi.gatewayIP();
+  String url = "http://" + gateway.toString() + ":5000/api/sensors/telemetry";
+  HTTPClient http;
+  http.setTimeout(2000);
+  if (http.begin(url)) {
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-Device-Token", "plant-lab-auth-token-9981");
+    String payload = "{\"device_id\":\"esp32-cam-lux\",\"plant_id\":\"test-specimen-1\",\"light_lux\":" + String(lux, 1) + "}";
+    int code = http.POST(payload);
+    if (code == 200 || code == 201) {
+      Serial.printf("  └─> [SYNTERRA LUX] Posted %5.1f Lux to dashboard (HTTP %d)\n", lux, code);
+    }
+    http.end();
+  }
+}
 
 // Auto-register camera IP with the SYNTERRA host server
 void announceToSynterra() {
@@ -329,16 +354,39 @@ void setup() {
     Serial.println(F("=========================================================="));
     startCameraServer();
   }
+
+  // 4. Initialize BH1750 Light Sensor on G21 (SDA) and G22 (SCL)
+  Serial.println(F("[INIT] Initializing BH1750 Light Meter on G21/G22..."));
+  Wire.begin(21, 22);
+  if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
+    Serial.println(F("✓ [BH1750] Initialized successfully on G21/G22!"));
+    bh1750_found = true;
+  } else {
+    Serial.println(F("✗ [BH1750] Not detected on G21/G22 (running in camera-only mode)."));
+  }
 }
 
 // ==============================================================================
 // Loop
 // ==============================================================================
 void loop() {
-  // Periodic heartbeat announce to keep SYNTERRA synchronized
-  if (millis() - lastAnnounceTime > announceInterval) {
-    lastAnnounceTime = millis();
+  unsigned long now = millis();
+
+  // Periodic heartbeat announce to keep SYNTERRA synchronized (every 30s)
+  if (now - lastAnnounceTime > announceInterval) {
+    lastAnnounceTime = now;
     announceToSynterra();
   }
+
+  // Periodic BH1750 Lux telemetry to dashboard (every 20s)
+  if (bh1750_found && (now - lastLuxTime > luxInterval || lastLuxTime == 0)) {
+    lastLuxTime = now;
+    float lux = lightMeter.readLightLevel();
+    Serial.printf("[BH1750] Light Intensity: %6.1f Lux\n", lux);
+    if (lux >= 0.0) {
+      sendLuxToSynterra(lux);
+    }
+  }
+
   delay(100);
 }
