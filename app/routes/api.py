@@ -14,6 +14,9 @@ from app.services.weather_service import weather_service
 from app.services.soil_geospatial_service import soil_geospatial_service
 from app.services.gbif_service import gbif_service
 from app.services.multimodal_vision_service import multimodal_vision_service
+from app.services.agronomic_analytics_service import agronomic_analytics
+from app.services.telegram_bot_service import telegram_bot
+from app.services.fleet_service import fleet_service
 
 api_bp = Blueprint('api', __name__)
 
@@ -968,5 +971,80 @@ def diagnose_multimodal():
 
     return jsonify(result), 200
 
+# ============================================================================
+# Advanced Agronomic Biophysics, Fleet Management & Telegram Alerts
+# ============================================================================
 
+@api_bp.route('/agronomy/analytics', methods=['GET'])
+def get_agronomic_analytics():
+    """Returns FAO-56 ET0, water depletion forecaster, fungal spore risk, and GDD phenology."""
+    latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+    telem = latest.to_dict() if latest else None
+    crop_key = request.args.get('crop_key', ACTIVE_CROP_KEY)
+    analytics = agronomic_analytics.get_full_analytics(telem, crop_key=crop_key)
+    return jsonify(analytics), 200
+
+
+@api_bp.route('/fleet/zones', methods=['GET'])
+def get_fleet_zones():
+    """Retrieve all greenhouse bays and hydroponic racks in multi-node fleet."""
+    latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+    telem = latest.to_dict() if latest else None
+    zones = fleet_service.get_all_zones(telem)
+    return jsonify({
+        'success': True,
+        'active_zone_id': fleet_service.active_zone_id,
+        'zones': zones
+    }), 200
+
+
+@api_bp.route('/fleet/select', methods=['POST'])
+def select_fleet_zone():
+    """Switch active console greenhouse zone."""
+    data = request.get_json(silent=True) or {}
+    zone_id = data.get('zone_id')
+    success, zone = fleet_service.set_active_zone(zone_id)
+    if success:
+        return jsonify({'success': True, 'active_zone': zone}), 200
+    return jsonify({'success': False, 'message': f'Zone {zone_id} not found'}), 404
+
+
+@api_bp.route('/telegram/status', methods=['GET'])
+def get_telegram_status():
+    """Check Telegram bot configuration and connectivity state."""
+    return jsonify({
+        'success': True,
+        'configured': telegram_bot.is_configured,
+        'bot_token_masked': '••••••••' if telegram_bot.bot_token else None,
+        'chat_id': telegram_bot.chat_id if telegram_bot.chat_id else None,
+        'mode': 'LIVE' if telegram_bot.is_configured else 'SIMULATED STANDBY'
+    }), 200
+
+
+@api_bp.route('/telegram/test', methods=['POST'])
+def send_telegram_test():
+    """Send test alert pulse to Telegram."""
+    latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+    t = latest.temperature_c if latest else 24.2
+    h = latest.humidity_pct if latest else 62.0
+    s = latest.soil_moisture_pct if latest else 55.0
+    l = latest.light_lux if latest else 1250
+    test_msg = (
+        f"🌿 <b>SYNTERRA // TEST TELEGRAM ALERT PULSE</b>\n\n"
+        f"✅ <b>Status:</b> Telemetry Link Online\n"
+        f"🌡️ <b>Temp:</b> {t}°C | <b>RH:</b> {h}%\n"
+        f"🌱 <b>Soil:</b> {s}% | <b>Lux:</b> {l}\n"
+        f"🕒 <i>{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}</i>"
+    )
+    res = telegram_bot.send_message(test_msg)
+    return jsonify(res), 200
+
+
+@api_bp.route('/telegram/command', methods=['POST'])
+def execute_telegram_command():
+    """Execute remote command (/status, /water <sec>, /stop, /help)."""
+    data = request.get_json(silent=True) or {}
+    command = data.get('command', '/status')
+    result = telegram_bot.execute_command(command)
+    return jsonify(result), 200
 

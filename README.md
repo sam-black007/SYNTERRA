@@ -34,6 +34,11 @@ SYNTERRA is an enterprise-grade IoT and AI-driven precision agriculture platform
    - [Geospatial Pedology & Soil Science (ISRIC SoilGrids + USDA)](#6-geospatial-pedology--soil-science-isric-soilgrids--usda)
    - [Authoritative GBIF Biodiversity Taxonomy Verification](#7-authoritative-biodiversity-taxonomy-verification-gbif)
    - [Solar Irradiance (DNI/GHI) & Microclimate Radiative Flux](#8-solar-irradiance-dnighi--microclimate-radiative-flux-open-meteo)
+   - [FAO-56 Penman-Monteith Evapotranspiration ($ET_0$) & Soil Water Depletion](#9-fao-56-penman-monteith-evapotranspiration-et0--soil-water-depletion)
+   - [Predictive Fungal Spore Incubation Risk (Smith Period & Mills Model)](#10-predictive-fungal-spore-incubation-risk-meter-smith-period--mills-model)
+   - [Growing Degree Days (GDD) & BBCH Crop Phenology Tracker](#11-growing-degree-days-gdd--bbch-crop-phenology-stage-tracker)
+   - [Multi-Zone / Multi-Node Greenhouse Fleet Management](#12-multi-zone--multi-node-greenhouse-fleet-management)
+   - [Telegram Remote Farm Manager & Alert Bot with 2-Way Commands](#13-telegram-remote-farm-manager--alert-bot-with-2-way-commands)
 8. [System Architecture Flowcharts](#-system-architecture-flowcharts)
 9. [Complete REST API Reference](#-api-reference)
 10. [Troubleshooting & FAQ](#-troubleshooting--faq)
@@ -465,6 +470,98 @@ SYNTERRA correlates ambient photometric Lux measured by the on-site BH1750 with 
 
 ---
 
+### 9. FAO-56 Penman-Monteith Evapotranspiration ($ET_0$) & Soil Water Depletion
+
+SYNTERRA implements the internationally standardized **FAO-56 Penman-Monteith equation** (Food and Agriculture Organization Irrigation and Drainage Paper No. 56) to model reference evapotranspiration ($ET_0$) and predict soil moisture depletion rates:
+
+$$ET_0 = \frac{0.408 \Delta (R_n - G) + \gamma \frac{900}{T + 273} u_2 (e_s - e_a)}{\Delta + \gamma (1 + 0.34 u_2)}$$
+
+Where:
+* $R_n$: Net radiation at the crop surface ($MJ \cdot m^{-2} \cdot \text{day}^{-1}$), dynamically converted from Open-Meteo GHI and canopy lux.
+* $G$: Soil heat flux density ($MJ \cdot m^{-2} \cdot \text{day}^{-1}$), modeled from diurnal ambient temperature amplitudes.
+* $T$: Mean canopy air temperature ($^\circ C$) ingested from the physical DHT11 sensor.
+* $u_2$: Wind speed at 2 m height ($m/s$), standardized for greenhouse microclimates with active circulation.
+* $e_s - e_a$: Vapor pressure deficit ($kPa$), computed from psychrometric saturation curves.
+* $\Delta$: Slope of the saturation vapor pressure curve ($kPa / ^\circ C$).
+* $\gamma$: Psychrometric constant ($\approx 0.0673\text{ kPa}/^\circ C$ at sea level).
+
+#### Crop Evapotranspiration & Depletion Hours Forecaster:
+$$ET_c = K_c \times ET_0$$
+
+* **Crop Coefficient ($K_c$):** Dynamically referenced from active crop profile (e.g. $K_c = 1.15$ for fruiting Tomato; $K_c = 0.95$ for Sweet Basil).
+* **Volumetric Water Consumption:** Converts $mm/\text{day}$ into daily container water loss:
+  $$\text{Daily Container Consumption } (mL/\text{pot/day}) = ET_c \times \text{Container Surface Area} \times 10$$
+* **Depletion Forecaster:** Projects hours remaining until substrate moisture drops to the active irrigation threshold based on current soil water storage and transpiration rate.
+
+---
+
+### 10. Predictive Fungal Spore Incubation Risk Meter (Smith Period & Mills Model)
+
+Rather than waiting for visible disease lesions to appear, SYNTERRA computes real-time infection risk scores for airborne pathogens (*Alternaria solani* early blight, *Phytophthora infestans* late blight, *Botrytis cinerea* gray mold) using the **Smith Period criteria** and **Mills Infection Period models**:
+
+* **Smith Period Criteria:** A period of at least two consecutive days where:
+  1. Minimum temperature $T_{\min} \ge 10^\circ C$
+  2. Relative humidity $RH \ge 75\%$ for at least 11 hours per day
+* **Spore Germination Index ($0 - 100\%$):** Evaluates leaf wetness duration, relative humidity dwell time, and thermal favorability curve:
+  $$\text{Risk Index} = f(RH_{\text{dwell}}, T_{\text{mean}}, \text{VPD}_{\text{depression}})$$
+* **Preventative Advisory Engine:**
+  * **$0 - 35\%$ (Negligible Risk):** Dry foliar microclimate. Spore germination suspended.
+  * **$35 - 70\%$ (Moderate Watch):** Borderline humidity. Pathogen sporulation possible; increase ventilation fan speed.
+  * **$70 - 100\%$ (High / Critical Alert):** Prolonged leaf moisture and elevated thermal conditions. Immediate bio-fungicide preventative spray (*Bacillus subtilis* or copper octanoate) advised before mycelial penetration.
+
+---
+
+### 11. Growing Degree Days (GDD) & BBCH Crop Phenology Stage Tracker
+
+SYNTERRA tracks the developmental aging of crops by accumulating thermal heat units (**Growing Degree Days - GDD**), eliminating guesswork based on calendar days:
+
+$$GDD = \sum \max\left( \frac{T_{\max} + T_{\min}}{2} - T_{\text{base}}, 0 \right)$$
+
+* **Base Temperature ($T_{\text{base}}$):** Species-calibrated threshold below which growth arrests ($10^\circ C$ for Tomato, $12^\circ C$ for Sweet Basil).
+* **BBCH Phenological Scale Mapping:**
+  * **BBCH 00–09:** *Germination & Seedling Emergence* ($0 - 120\text{ GDD}$)
+  * **BBCH 10–19:** *Vegetative Leaf Development* ($120 - 320\text{ GDD}$)
+  * **BBCH 51–65:** *Inflorescence & Flowering* ($320 - 550\text{ GDD}$)
+  * **BBCH 71–79:** *Fruit Development & Setting* ($550 - 850\text{ GDD}$)
+  * **BBCH 81–89:** *Fruit Ripening & Harvest Maturity* ($> 850\text{ GDD}$)
+* **Real-Time Progress Bar:** Displays percentage completion within the current growth stage and exact heat units remaining until the next phenological phase.
+
+---
+
+### 12. Multi-Zone / Multi-Node Greenhouse Fleet Management
+
+For commercial and research multi-bay facilities, SYNTERRA supports multi-node greenhouse fleet management:
+
+* **Top Header Zone Selector:** Seamlessly switch between monitored greenhouse zones from any view without reloading.
+* **Default Active Fleet Profiles:**
+  * **Zone 1: Canopy Bay Alpha:** Connected to physical ESP32 USB-C hardware node monitoring a fruiting Beefsteak Tomato crop (*Solanum lycopersicum*).
+  * **Zone 2: Propagation Nursery Beta:** Monitoring Sweet Basil seedling propagation (*Ocimum basilicum*) under controlled microclimate.
+  * **Zone 3: Hydroponic NFT Gutter Gamma:** Monitoring nutrient film technique Butterhead Lettuce (*Lactuca sativa*).
+* **Dynamic Recalibration:** Switching zones instantly reconfigures botanical targets, safe VPD thresholds, irrigation trigger setpoints, and FAO-56 $K_c$ crop coefficients.
+
+---
+
+### 13. Telegram Remote Farm Manager & Alert Bot with 2-Way Commands
+
+<p align="center">
+  <img src="docs/images/telegram_bot_console_live.png" alt="SYNTERRA Telegram Remote Farm Manager & Alert Bot Console" width="90%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);" />
+</p>
+
+SYNTERRA features direct bidirectional integration with the **Telegram Bot API v7.0**, enabling agronomists and operators to monitor and control their facility from any mobile device:
+
+* **Automated Instant Push Notifications:**
+  * **🚨 Critical Soil Drought:** Dispatched immediately when soil moisture drops below critical limits ($< 20\%$).
+  * **⚠️ Reservoir Safety Trip:** Dispatched when the hardware float switch detects a depleted water supply and disengages the pump.
+  * **🔬 AI Disease Identification:** Dispatched when Gemini Multimodal AI or Kindwise classifies a high-confidence foliar pathogen.
+* **2-Way Remote Field Commands:**
+  * `/status` &rarr; Returns live canopy temperature, relative humidity, substrate moisture %, photometric flux lux, and active irrigation mode.
+  * `/water <seconds>` &rarr; Remotely commands an emergency irrigation pulse (5s–30s) on relay GPIO D27.
+  * `/stop` &rarr; Emergency shutoff command; cuts solenoid power in <100ms.
+  * `/help` &rarr; Prints the complete command manual with parameter specifications.
+* **Embedded Test & Simulation Console:** In the Dossiers tab, operators can dispatch test alert pulses and execute 2-way bot terminal commands with immediate transmission feedback.
+
+---
+
 ## 📊 System Architecture Flowcharts
 
 ### 1. Edge Microcontroller Signal & Firmware Flow
@@ -596,6 +693,12 @@ flowchart LR
 | `/api/irrigation/emergency_stop` | `POST` | &mdash; | Instant solenoid pump emergency shutoff |
 | `/api/camera/stream` | `GET` | &mdash; | Real-time optical MJPEG video stream |
 | `/api/camera/capture` | `POST` | &mdash; | Capture frame from camera node & run AI diagnosis |
+| `/api/agronomy/analytics` | `GET` | &mdash; | **FAO-56 $ET_0$, water depletion forecast, Smith Period spore risk & GDD** |
+| `/api/fleet/zones` | `GET` | &mdash; | **List multi-zone greenhouse registry with active node & telemetry** |
+| `/api/fleet/select` | `POST` | &mdash; | **Switch active greenhouse bay and auto-apply crop profile** |
+| `/api/telegram/status` | `GET` | &mdash; | **Telegram bot connection status, configured mode & chat ID** |
+| `/api/telegram/test` | `POST` | &mdash; | **Dispatch immediate test alert pulse to Telegram** |
+| `/api/telegram/command` | `POST` | &mdash; | **Execute 2-way remote command (`/status`, `/water <sec>`, `/stop`)** |
 
 ---
 
@@ -635,19 +738,24 @@ SYNTERRA/
 │   │   ├── main.py                 # HTML dashboard routing
 │   │   └── pathology.py            # Kindwise diagnosis image routes
 │   └── services/
+│       ├── agronomic_analytics_service.py # FAO-56 ET0, Spore Risk & GDD Phenology model
 │       ├── camera_service.py       # MJPEG optical streaming & clean standby frame
+│       ├── crop_profiles.py        # Centralized botanical species configuration
+│       ├── fleet_service.py        # Multi-zone greenhouse bay registry
 │       ├── irrigation_controller.py# Closed-loop watchdog, safety timeouts & emergency cutoff
 │       ├── pdf_generator.py        # ReportLab PDF clinical dossier compiler
-│       └── plantid_client.py       # Kindwise Crop.Health / Plant.id API client
+│       ├── plantid_client.py       # Kindwise Crop.Health / Plant.id API client
+│       └── telegram_bot_service.py # Telegram push alerts & 2-way command handler
 ├── docs/
 │   └── images/
 │       ├── dashboard_live.png          # High-resolution real-time console preview
 │       ├── dashboard_full_overview.png # Comprehensive full-page overview console
 │       ├── pathology_studio_live.png   # Dual-Engine AI Pathology Studio preview
 │       ├── irrigation_watchdog_live.png# Autonomous Irrigation Watchdog preview
+│       ├── telegram_bot_console_live.png# Telegram Remote Farm Manager console preview
 │       ├── hardware_schematic_2d.png   # 2D circuit wiring schematic graphic
 │       ├── hardware_schematic_2d.svg   # Scalable vector graphics schematic source
-│       └── esp32_hardware_setup.jpg    # Physical ESP32 board arrangement photo
+│       └── esp32_hardware_setup.jpg    # Physical ESP32 bench arrangement photo
 ├── firmware/
 │   └── Sensor_Hardware_Diagnostic/
 │       └── Sensor_Hardware_Diagnostic.ino # Production SensorManager ESP32 firmware (6s cadence)

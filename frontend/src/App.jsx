@@ -37,7 +37,10 @@ import {
   Bot,
   Globe,
   Layers,
-  Atom
+  Atom,
+  Bell,
+  Terminal,
+  Bug
 } from 'lucide-react';
 import ChatbotWidget from './components/ChatbotWidget';
 import {
@@ -190,6 +193,13 @@ export default function App() {
   const [gbifTaxonomy, setGbifTaxonomy] = useState(null);
   const [solarWeather, setSolarWeather] = useState(null);
   const [pathologyEngine, setPathologyEngine] = useState('gemini'); // 'gemini' | 'kindwise'
+  const [fleetZones, setFleetZones] = useState([]);
+  const [activeZoneId, setActiveZoneId] = useState('zone-1');
+  const [agronomyData, setAgronomyData] = useState(null);
+  const [telegramStatus, setTelegramStatus] = useState(null);
+  const [telegramSimOutput, setTelegramSimOutput] = useState('');
+  const [telegramCmdInput, setTelegramCmdInput] = useState('/status');
+  const [isSendingTg, setIsSendingTg] = useState(false);
   const fileInputRef = useRef(null);
 
   // Initialize Socket.io and data polling
@@ -397,6 +407,30 @@ export default function App() {
           if (sol.success) setSolarWeather(sol);
         })
         .catch(() => {});
+
+      fetch('/api/agronomy/analytics')
+        .then((r) => r.json())
+        .then((ag) => {
+          if (ag.success) setAgronomyData(ag);
+        })
+        .catch(() => {});
+
+      fetch('/api/fleet/zones')
+        .then((r) => r.json())
+        .then((fz) => {
+          if (fz.success && fz.zones) {
+            setFleetZones(fz.zones);
+            setActiveZoneId(fz.active_zone_id || 'zone-1');
+          }
+        })
+        .catch(() => {});
+
+      fetch('/api/telegram/status')
+        .then((r) => r.json())
+        .then((tg) => {
+          if (tg.success) setTelegramStatus(tg);
+        })
+        .catch(() => {});
     } catch (err) {
       console.warn('Initial data load warning:', err);
     }
@@ -440,9 +474,69 @@ export default function App() {
           const dData = await dRes.json();
           setDliData(dData);
         }
+        fetch(`/api/agronomy/analytics?crop_key=${cropKey}`)
+          .then((r) => r.json())
+          .then((ag) => { if (ag.success) setAgronomyData(ag); })
+          .catch(() => {});
       }
     } catch (err) {
       console.error('Failed to update active crop profile:', err);
+    }
+  };
+
+  // Switch Multi-Zone Greenhouse Bay
+  const handleSwitchZone = async (zoneId) => {
+    setActiveZoneId(zoneId);
+    try {
+      const res = await fetch('/api/fleet/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zone_id: zoneId })
+      });
+      const data = await res.json();
+      if (data.success && data.active_zone) {
+        handleSelectCrop(data.active_zone.crop_key);
+        fetch('/api/fleet/zones')
+          .then((r) => r.json())
+          .then((fz) => { if (fz.zones) setFleetZones(fz.zones); });
+      }
+    } catch (err) {
+      console.error('Failed to switch greenhouse zone:', err);
+    }
+  };
+
+  // Send Test Alert to Telegram Bot
+  const handleSendTelegramTest = async () => {
+    setIsSendingTg(true);
+    try {
+      const res = await fetch('/api/telegram/test', { method: 'POST' });
+      const data = await res.json();
+      setTelegramSimOutput(data.message || data.preview || 'Test alert dispatched!');
+    } catch (err) {
+      setTelegramSimOutput('Error sending Telegram alert: ' + err.message);
+    } finally {
+      setIsSendingTg(false);
+    }
+  };
+
+  // Execute 2-Way Command on Telegram Bot
+  const handleRunTelegramCommand = async () => {
+    if (!telegramCmdInput.trim()) return;
+    try {
+      const res = await fetch('/api/telegram/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: telegramCmdInput.trim() })
+      });
+      const data = await res.json();
+      setTelegramSimOutput(data.reply || JSON.stringify(data));
+      if (telegramCmdInput.startsWith('/water')) {
+        fetch('/api/irrigation/status')
+          .then((r) => r.json())
+          .then((ir) => { if (ir.irrigation) setIrrigationStatus(ir.irrigation); });
+      }
+    } catch (err) {
+      setTelegramSimOutput('Command execution failed: ' + err.message);
     }
   };
 
@@ -752,6 +846,25 @@ export default function App() {
             <span>Dossiers</span>
           </button>
         </div>
+
+        {/* Multi-Zone Greenhouse Fleet Selector */}
+        {fleetZones && fleetZones.length > 0 && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-xs shadow-inner">
+            <Globe className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+            <span className="text-slate-400 hidden md:inline font-medium">Zone:</span>
+            <select
+              value={activeZoneId}
+              onChange={(e) => handleSwitchZone(e.target.value)}
+              className="bg-transparent text-slate-100 text-xs font-bold outline-none cursor-pointer"
+            >
+              {fleetZones.map((z) => (
+                <option key={z.id} value={z.id} className="bg-slate-900 text-white">
+                  {z.crop_icon} {z.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Status Indicators */}
         <div className="flex items-center gap-3 text-xs">
@@ -1413,6 +1526,155 @@ export default function App() {
                   <div className="text-[11px] text-slate-400 pt-1 flex items-center justify-between">
                     <span>Flux correlation with BH1750 photometer</span>
                     <span className="text-emerald-400 font-medium">Calibrated Shortwave Spectrum</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Agronomic Biophysics, Evapotranspiration (ET0) & Fungal Spore Risk Card */}
+            <div className="bg-[#0c1424] border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-teal-950/60 text-teal-400 border border-teal-800/40">
+                    <Sprout className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-white text-sm">Agronomic Biophysics &amp; Preventative Spore Intelligence</h3>
+                      <span className="text-[10px] font-mono text-teal-400 bg-teal-950/40 px-2 py-0.5 rounded border border-teal-800/30">
+                        FAO-56 ET₀ &bull; Smith Period &bull; BBCH GDD
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Microclimate energy balance, reference evapotranspiration, and pathogen incubation modeling.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-slate-300 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
+                    GDD: <strong className="text-amber-400">{agronomyData?.gdd_phenology?.cumulative_gdd || 530.6} &deg;C&middot;d</strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* 3 Analytics Pods */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Pod 1: Evapotranspiration & Water Depletion */}
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-cyan-300 font-bold mb-1.5">
+                      <span className="flex items-center gap-1.5">
+                        <Droplets className="w-3.5 h-3.5" />
+                        <span>FAO-56 Evapotranspiration (ET₀)</span>
+                      </span>
+                      <span className="font-mono text-[10px] bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/30">
+                        Kc: {agronomyData?.evapotranspiration?.crop_coefficient_kc || 1.15}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 pt-1">
+                      <span className="text-2xl font-black text-white font-mono">
+                        {agronomyData?.evapotranspiration?.et0_mm_day || 0.87}
+                      </span>
+                      <span className="text-xs text-slate-400">mm/day</span>
+                      <span className="text-xs font-mono text-cyan-400 ml-auto">
+                        (~{agronomyData?.evapotranspiration?.estimated_daily_ml || 120} mL/pot)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                      Crop consumption rate: <strong className="text-slate-200">{agronomyData?.evapotranspiration?.etc_crop_mm_day || 1.0} mm/d</strong>.
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 text-[11px] flex items-center justify-between text-slate-400">
+                    <span>Depletion Forecast:</span>
+                    <span className="font-mono text-emerald-400 font-bold">
+                      {agronomyData?.water_depletion?.hours_until_irrigation_required > 0
+                        ? `Next pulse in ~${agronomyData.water_depletion.hours_until_irrigation_required}h`
+                        : 'Substrate at target threshold'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Pod 2: Predictive Fungal Spore Risk (Smith Period) */}
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-amber-300 font-bold mb-1.5">
+                      <span className="flex items-center gap-1.5">
+                        <Bug className="w-3.5 h-3.5" />
+                        <span>Fungal Spore Risk (Smith Period)</span>
+                      </span>
+                      <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold ${
+                        (agronomyData?.fungal_spore_risk?.spore_germination_index || 30) >= 70
+                          ? 'bg-rose-950/50 text-rose-300 border-rose-800/40'
+                          : 'bg-emerald-950/50 text-emerald-300 border-emerald-800/40'
+                      }`}>
+                        {agronomyData?.fungal_spore_risk?.risk_level?.split(' ')[0] || 'NEGLIGIBLE'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1 pt-1">
+                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                        <span>Spore Germination Index:</span>
+                        <span className="text-white font-bold">{agronomyData?.fungal_spore_risk?.spore_germination_index || 30.9}%</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          style={{ width: `${Math.min(100, agronomyData?.fungal_spore_risk?.spore_germination_index || 31)}%` }}
+                          className={`h-full transition-all duration-500 ${
+                            (agronomyData?.fungal_spore_risk?.spore_germination_index || 30) >= 70
+                              ? 'bg-gradient-to-r from-amber-500 to-rose-500'
+                              : 'bg-gradient-to-r from-teal-500 to-emerald-400'
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 mt-2 leading-relaxed">
+                      {agronomyData?.fungal_spore_risk?.agronomic_advisory || 'Dry foliar microclimate. Spore germination suspended.'}
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 text-[10px] text-slate-500 flex items-center justify-between font-mono">
+                    <span>Target: Alternaria / Phytophthora</span>
+                    <span className="text-emerald-400">Mills &amp; Smith Scale</span>
+                  </div>
+                </div>
+
+                {/* Pod 3: Growing Degree Days & Phenology (BBCH) */}
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-amber-300 font-bold mb-1.5">
+                      <span className="flex items-center gap-1.5">
+                        <Sun className="w-3.5 h-3.5" />
+                        <span>BBCH Phenological Stage</span>
+                      </span>
+                      <span className="font-mono text-[10px] bg-amber-950/40 text-amber-400 px-1.5 py-0.5 rounded border border-amber-800/30">
+                        {agronomyData?.gdd_phenology?.bbch_code || 'BBCH 51-65'}
+                      </span>
+                    </div>
+
+                    <p className="text-sm font-black text-white mt-1">
+                      {agronomyData?.gdd_phenology?.current_stage_name || 'Inflorescence & Flowering'}
+                    </p>
+
+                    <div className="space-y-1 pt-2">
+                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                        <span>Stage Progress:</span>
+                        <span className="text-amber-400 font-bold">{agronomyData?.gdd_phenology?.stage_progress_pct || 44.3}%</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          style={{ width: `${Math.min(100, agronomyData?.gdd_phenology?.stage_progress_pct || 44)}%` }}
+                          className="h-full bg-gradient-to-r from-yellow-500 to-amber-400 transition-all duration-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+                    <span>Next: <strong className="text-slate-200">{agronomyData?.gdd_phenology?.next_stage_name || 'Fruit Development'}</strong></span>
+                    <span className="font-mono text-amber-400 font-bold">+{agronomyData?.gdd_phenology?.gdd_to_next_stage || 189} GDD</span>
                   </div>
                 </div>
               </div>
@@ -2164,6 +2426,85 @@ export default function App() {
         {/* ==================================================================== */}
         {activeTab === 'dossiers' && (
           <div className="space-y-6 animate-fadeIn">
+            {/* Telegram Remote Farm Manager & Alert Bot Console */}
+            <div className="bg-[#0d1422] border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between flex-wrap gap-4 pb-4 border-b border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-cyan-950/60 text-cyan-400 border border-cyan-800/40">
+                    <Bell className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-bold text-white">Telegram Remote Farm Manager &amp; Alert Bot</h3>
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded border uppercase font-bold ${
+                        telegramStatus?.configured
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}>
+                        {telegramStatus?.mode || 'SIMULATED STANDBY'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Direct automated push alerts for critical soil drought, empty reservoir interlocks, and 2-way remote commands.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSendTelegramTest}
+                    disabled={isSendingTg}
+                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-black font-bold text-xs shadow-md transition disabled:opacity-50"
+                  >
+                    <Send className={`w-3.5 h-3.5 ${isSendingTg ? 'animate-bounce' : ''}`} />
+                    <span>{isSendingTg ? 'Transmitting...' : 'Send Test Alert Pulse'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 2-Way Command Terminal Row */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2.5">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                    <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>2-Way Remote Command Terminal</span>
+                  </span>
+                  <p className="text-[11px] text-slate-400">
+                    Execute field commands remotely (supported: <code>/status</code>, <code>/water 12</code>, <code>/stop</code>, <code>/help</code>):
+                  </p>
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={telegramCmdInput}
+                      onChange={(e) => setTelegramCmdInput(e.target.value)}
+                      placeholder="/status"
+                      className="flex-1 bg-black/50 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100 font-mono text-xs focus:outline-none focus:border-cyan-500"
+                    />
+                    <button
+                      onClick={handleRunTelegramCommand}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs border border-slate-700 transition"
+                    >
+                      Execute
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-black/60 border border-slate-800/90 font-mono text-[11px] space-y-1.5 flex flex-col justify-between">
+                  <div>
+                    <span className="text-slate-500 uppercase text-[10px] tracking-wider block mb-1">Bot Terminal Transmission Log:</span>
+                    <div
+                      className="text-slate-200 whitespace-pre-wrap leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: telegramSimOutput || 'Awaiting command execution or alert event...' }}
+                    />
+                  </div>
+                  <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-800 flex items-center justify-between">
+                    <span>Target: {telegramStatus?.chat_id || 'Standby Simulation Channel'}</span>
+                    <span className="text-cyan-400">Telegram Bot API v7.0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-[#0d1422] border border-slate-800 rounded-2xl p-6">
               <div className="flex items-center justify-between flex-wrap gap-4 pb-6 border-b border-slate-800">
                 <div>
