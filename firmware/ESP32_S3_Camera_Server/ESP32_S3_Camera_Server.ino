@@ -318,7 +318,16 @@ void setup() {
     announceToSynterra();
   } else {
     Serial.println();
-    Serial.println(F("[WIFI ERROR] Failed to connect. Check SSID/Password."));
+    Serial.println(F("[WIFI NOTICE] Hotspot not detected. Starting Standalone Diagnostic SoftAP..."));
+    WiFi.softAP("SYNTERRA-CAM-TEST", "12345678");
+    Serial.println(F("=========================================================="));
+    Serial.println(F("[WIFI AP] Standalone Wi-Fi Access Point Online!"));
+    Serial.println(F("[WIFI AP] SSID:     SYNTERRA-CAM-TEST"));
+    Serial.println(F("[WIFI AP] Password: 12345678"));
+    Serial.printf("[WIFI AP] Local Stream URL: http://%s/stream\n", WiFi.softAPIP().toString().c_str());
+    Serial.printf("[WIFI AP] Local Capture URL: http://%s/capture\n", WiFi.softAPIP().toString().c_str());
+    Serial.println(F("=========================================================="));
+    startCameraServer();
   }
 }
 
