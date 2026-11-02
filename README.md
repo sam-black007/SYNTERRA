@@ -1,152 +1,223 @@
-# SYNTERRA
-### Agricultural Intelligence &mdash; Plant Disease Detection & Autonomous Monitoring
+# 🌱 SYNTERRA
+### Autonomous Botanical Intelligence & AgriTech IoT Platform
 
-**Engineering Intelligence for a Growing World.**
+**Engineering Precision Intelligence for Autonomous Agriculture.**
 
-Minimal, production-ready Flask backend with **real Kindwise crop.health / Plant.id API** disease detection, ESP32-S3 sensor client firmware, and USB serial telemetry ingestion.
-
-## Quick Start
-
-```powershell
-# Clone
-git clone https://github.com/sam-black007/SYNTERRA.git
-cd SYNTERRA
-
-# Create virtual environment
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure API key
-copy .env.example .env
-# Edit .env and configure your PLANT_API_KEY and DEVICE_TOKEN
-
-## Quick Start (One-Click)
-
-On Windows, double-click **`start.bat`** (or run `.\start.ps1` in PowerShell). It automatically checks the virtual environment, starts the server, and opens your browser to the Live Console.
-
-### Or Run with Docker:
-```bash
-docker compose up -d --build
-```
-Open `http://localhost:5000/dashboard`
-
-```powershell
-# Manual Start:
-git clone https://github.com/sam-black007/SYNTERRA.git
-cd SYNTERRA
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-copy .env.example .env
-python run.py
-```
-
-## Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/dashboard` | GET | **React + WebSocket Real-Time Laboratory Console** |
-| `/` | GET | Classic dashboard with recent diagnoses |
-| `/pathology` | GET/POST | Upload leaf image for real disease detection |
-| `/diagnosis/<id>` | GET | View saved diagnosis result |
-| `/integrations` | GET | Configure & test Plant.id API key |
-| `/api/health` | GET | Health check |
-| `/api/integrations/plantid/status` | GET | Check if API key is configured |
-| `/api/integrations/plantid/test` | POST | Validate API key (no credits consumed) |
-| `/api/diagnose` | POST | Upload image → real Plant.id diagnosis |
-| `/api/diagnoses` | GET | List all saved diagnoses |
-| `/api/diagnosis/<id>` | GET | Get single diagnosis as JSON |
-| `/api/diagnosis/<id>/pdf` | GET | **Download Official PDF Pathology Dossier with Treatment Advisory** |
-| `/api/sensors/telemetry` | POST | Ingest ESP32 telemetry (`X-Device-Token` auth) |
-| `/api/sensors/latest` | GET | Get most recent sensor reading |
-| `/api/sensors/history` | GET | Get historical sensor readings (`?limit=50`) |
-| `/api/sensors/export/csv` | GET | Download complete telemetry history as CSV |
-| `/api/camera/stream` | GET | Live MJPEG optical stream with HUD overlay |
-| `/api/camera/capture` | POST | Snap camera frame & run Kindwise AI diagnosis |
-| `/api/irrigation/status` | GET | Live pump state, countdown & safety watchdog |
-| `/api/irrigation/manual` | POST | Execute manual irrigation (5s–30s) |
-| `/api/irrigation/emergency_stop` | POST | Instant safety emergency cutoff |
-| `/api/irrigation/auto_config` | POST | Configure autonomous soil threshold rules |
-
-## Real-Time React Dashboard
-
-Built with React 18, Vite, Tailwind CSS, Recharts, and Flask-SocketIO:
-- **Live WebSocket Streaming**: Metrics update automatically as telemetry packets arrive over USB Serial or HTTP.
-- **Dynamic Gauges**: Air Temperature, Relative Humidity, Soil Moisture (FC-28), Ambient Light (BH1750), and Reservoir Interlock Status.
-- **Dual Time-Series Charts**: Micro-climate curves and root-zone/photometrics tracking.
-- Access directly at: **`http://localhost:5000/dashboard`**
-
-## Hardware & Telemetry Bridge
-
-### 1. ESP32-S3 Sensor Client Firmware
-Located at `firmware/ESP32_Sensor_Client/ESP32_Sensor_Client.ino`:
-- **DHT11**: Temperature & humidity on GPIO 2
-- **BH1750**: Ambient light (lux) on I2C (SDA GPIO 4, SCL GPIO 5)
-- **FC-28**: Soil moisture on GPIO 1 (Analog AO) and GPIO 40 (DO)
-- **Water Reservoir Switch**: GPIO 41
-- Emits structured JSON strings over Serial at 115200 baud every 10 seconds.
-- Built-in `SIMULATION_MODE` toggle for bench testing without attached hardware.
-
-### 2. ESP32-S3 Camera Server Firmware
-Located at `firmware/ESP32_S3_Camera_Server/ESP32_S3_Camera_Server.ino` & `camera_pins.h`:
-- **Supported Hardware**: Freenove ESP32-S3 WROOM CAM, Seeed Xiao ESP32S3 Sense, ESP32-S3-EYE, and AI-Thinker OV2640/OV3660/OV5640.
-- **Endpoints**:
-  - `http://<ESP32_IP>/stream` &mdash; High-performance MJPEG live stream.
-  - `http://<ESP32_IP>/capture` &mdash; High-resolution JPEG snapshot for Kindwise AI disease detection.
-- **Arduino IDE Settings**:
-  - Board: *ESP32S3 Dev Module*
-  - PSRAM: *OPI PSRAM* (or *QSPI PSRAM* for Xiao Sense) &mdash; **MUST BE ENABLED!**
-  - Partition Scheme: *Huge APP (3MB No OTA)*
-
-### 3. ESP32-S3 All-in-One Unified Station (Single Board Mode)
-Located at `firmware/ESP32_S3_Unified_Station/ESP32_S3_Unified_Station.ino` & `camera_pins.h`:
-- **The Ultimate Single-Code Solution**: Runs BOTH the live optical video stream (`/stream`), high-resolution leaf capture (`/capture`), and the environmental sensor readings (DHT11, light, soil moisture, water level) simultaneously on one ESP32-S3 board!
-- **Zero-Conflict Pin Routing**:
-  - DHT11: GPIO 42 (or GPIO 1 on Xiao Sense)
-  - FC-28 Soil Moisture: GPIO 1 (ADC1_CH0)
-  - Water Level Switch: GPIO 41
-  - BH1750 Light: I2C (SDA GPIO 21, SCL GPIO 47)
-- **Pre-Configured Wi-Fi**: Mobile Hotspot `jj` / `123456789`.
-- **Auto-Discovery**: Resolves at `http://synterra-cam.local` and auto-registers with the laptop server gateway.
-
-### 4. Serial Bridge
-Run the Python serial bridge to forward ESP32 USB telemetry directly into the Flask API:
-```powershell
-# Auto-detects connected ESP32 COM port and forwards telemetry
-python scripts/serial_bridge.py
-
-# Or test without hardware in synthetic mock mode:
-python scripts/serial_bridge.py --mock
-```
-
-## Testing & System Verification
-
-Run full-stack monitoring checks against your live running server:
-```powershell
-# 1. Full-stack system health & endpoint latency check
-python scripts/monitor_test.py
-
-# 2. End-to-end real image diagnosis with Kindwise Crop.health API
-python scripts/test_live_image.py
-```
-
-## Getting a Plant.id / Crop.health API Key
-
-1. Sign up at [plant.id](https://plant.id) or [kindwise.com](https://kindwise.com)
-2. Create an API key in your Kindwise dashboard
-3. Add it to `.env`: `PLANT_API_KEY=your_key_here`
-4. Test the connection at `/integrations` or `POST /api/integrations/plantid/test`
-
-## Tech Stack
-
-- Flask 3 + Flask-SQLAlchemy + Flask-WTF
-- python-dotenv, requests, Pillow, pyserial
-- SQLite database (`instance/plant_doctor.db`)
-- ESP32-S3 Arduino C++ firmware
+SYNTERRA is an enterprise-grade IoT and AI-driven precision agriculture platform. It bridges edge microcontroller sensing, closed-loop irrigation actuation, real-time agronomic telemetry fusion, and computer vision leaf pathology into an integrated laboratory console.
 
 ---
 
-**SYNTERRA — Engineering Intelligence for a Growing World.**
+## 🏛️ System Architecture
+
+```mermaid
+flowchart TD
+    subgraph Edge ["Hardware Edge Node (ESP32 USB-C)"]
+        DHT["DHT11 (D32)<br/>Temp & Humidity"]
+        SOIL["FC-28 (D34/D35)<br/>Soil Moisture"]
+        BH["BH1750 (D21/D22)<br/>Ambient Light Lux"]
+        RELAY["Relay Solenoid (D27)<br/>Irrigation Pump"]
+        MGR["SensorManager Firmware<br/>6-Second Cadence"]
+        DHT --> MGR
+        SOIL --> MGR
+        BH --> MGR
+        MGR -.->|Actuate| RELAY
+    end
+
+    subgraph DualLink ["Dual-Link Telemetry Pipeline"]
+        direction TB
+        USB["Link A: USB Serial<br/>JSON at 115200 Baud"]
+        WIFI["Link B: Wi-Fi REST<br/>HTTP POST /telemetry"]
+        BRIDGE["Python Serial Bridge<br/>(serial_bridge.py)"]
+        MGR -->|Cable| USB --> BRIDGE
+        MGR -->|Wireless| WIFI
+    end
+
+    subgraph Backend ["SYNTERRA Server (Flask + SQLAlchemy)"]
+        API["Telemetry Ingestion & Auth<br/>(X-Device-Token)"]
+        FUSION["Multi-Board Telemetry Fusion"]
+        VPD_ENG["VPD Psychrometric Engine"]
+        CLIMATE_ENG["Climate Inference Engine"]
+        IRRIG_MGR["Autonomous Irrigation Watchdog"]
+        DIAG_SVC["Kindwise Crop.Health / Gemini AI"]
+        DB[(SQLite / plant_doctor.db)]
+        
+        BRIDGE --> API
+        WIFI --> API
+        API --> FUSION --> DB
+        FUSION --> VPD_ENG
+        FUSION --> CLIMATE_ENG
+        FUSION --> IRRIG_MGR
+    end
+
+    subgraph UI ["Real-Time Operations Console (React 18 + Vite)"]
+        WS["Socket.IO WebSockets"]
+        BANNER["Microclimate Intelligence Banner"]
+        METRICS["Core Sensor Gauges & Dynamic Badges"]
+        CHARTS["Recharts Dual Time-Series Analytics"]
+        STUDIO["Optical Diagnostic Studio"]
+        PDF["PDF Pathology Dossier Generator"]
+
+        Backend -->|Socket.IO| WS
+        WS --> BANNER
+        WS --> METRICS
+        WS --> CHARTS
+        DIAG_SVC --> STUDIO
+        DIAG_SVC --> PDF
+    end
+```
+
+---
+
+## 🔌 Hardware Pinout & Wiring (USB-C ESP32 Dev Module)
+
+The system runs on a **Single-Board USB-C ESP32 Dev Module (Standard 30/38-Pin DevKit)** with zero pin collisions:
+
+| Sensor / Module | Sensor Pin | ESP32 Pin on Board | Bus / Logic Type | Hardware Function & Safety Rules |
+| :--- | :--- | :--- | :--- | :--- |
+| **DHT11** (Canopy Climate) | `DATA / OUT` | **`D32`** | Bidirectional GPIO | Pulls line LOW for 18ms; requires bidirectional drive (cannot use GPI pins like D34/D35). |
+| | `VCC` | **`3V3`** | 3.3V Power Bus | Dedicated 3.3V supply rail. |
+| | `GND` | **`GND`** | Ground Bus | Common ground reference. |
+| **FC-28** (Soil Moisture) | `A0` (Analog) | **`D34`** | `ADC1_CH6` | Dedicated ADC1 channel; operational simultaneously with active Wi-Fi radio. |
+| | `D0` (Digital) | **`D35`** | Digital Input | Optional onboard comparator threshold alert. |
+| | `VCC` | **`3V3`** | 3.3V Power Bus | Low noise sensor power rail. |
+| | `GND` | **`GND`** | Ground Bus | Common ground reference. |
+| **BH1750** (Canopy Lux) | `SDA` | **`D21`** | Hardware I2C SDA | Default ESP32 hardware I2C data line. |
+| | `SCL` | **`D22`** | Hardware I2C SCL | Default ESP32 hardware I2C clock line. |
+| | `VCC` | **`VIN` (5V)** | 5V Power Rail | Feeds the sensor's onboard 662K LDO regulator cleanly without voltage sag. |
+| | `GND` | **`GND`** | Ground Bus | Common ground reference. |
+| | `ADDR` | *Unconnected* | I2C Address `0x23` | Internal pull-down sets default address. |
+| **Relay Module** (Pump) | `IN / Signal` | **`D27`** | Digital Output | Drives transistor switch for pump coil; normally LOW (safe OFF). |
+| | `VCC` | **`VIN` (5V)** | 5V Power Rail | Dedicated coil power rail. |
+| | `GND` | **`GND`** | Ground Bus | Common ground reference. |
+
+---
+
+## 🌤️ Environmental Climate & Condition Classification Engine
+
+The firmware and backend continuously evaluate ambient photometric, thermal, psychrometric, and substrate metrics to classify the macro-atmospheric and microclimate states in real time:
+
+### 1. Photometric Flux Classifications (BH1750 Lux)
+* **`< 25 Lux`** &rarr; `🌙 Night / Dark` *(Transpiration paused; dark respiration active)*
+* **`25 – 200 Lux`** &rarr; `🌆 Dim / Twilight` *(Low indoor light or twilight transition)*
+* **`200 – 1,000 Lux`** &rarr; `☁️ Cloudy / Overcast` *(Soft diffused sunlight under cloud cover)*
+* **`1,000 – 10,000 Lux`** &rarr; `⛅ Daylight / Partly Cloudy` *(Optimal daylight photosynthetic radiation)*
+* **`10,000 – 25,000 Lux`** &rarr; `☀️ Sunny / Clear Sky` *(Peak clear sky solar radiation)*
+* **`> 25,000 Lux`** &rarr; `🔥 Intense Direct Sunlight` *(Elevated radiation; rapid evapotranspiration)*
+
+### 2. Substrate Moisture Classifications (FC-28 Soil Moisture)
+* **`< 20 %`** &rarr; `🏜️ Critical Drought` *(Immediate autonomous irrigation triggered)*
+* **`20 – 40 %`** &rarr; `⚠️ Dry (Needs Water)` *(Substrate depleted; watering cycle required)*
+* **`40 – 75 %`** &rarr; `🌱 Optimal Root Moisture` *(Ideal rhizosphere oxygen & moisture balance)*
+* **`> 75 %`** &rarr; `💧 Wet / Saturated` *(Roots fully hydrated)*
+
+### 3. Thermal & Psychrometric Classifications (DHT11)
+* **Temperature:** `< 16°C` Cold | `16–22°C` Mild/Cool | `22–28°C` Optimal | `28–34°C` Warm | `> 34°C` Heatwave
+* **Relative Humidity:** `< 35%` Arid | `35–65%` Ideal Humidity | `65–80%` Humid/Tropical | `> 80%` Saturated Air
+* **Vapor Pressure Deficit (VPD):** Calculated via psychrometric saturation curves:
+  $$\text{VP}_{\text{sat}} = 0.61078 \times e^{\left(\frac{17.27 \times T}{T + 237.3}\right)}, \quad \text{VPD} = \text{VP}_{\text{sat}} \times \left(1 - \frac{\text{RH}}{100}\right)$$
+
+---
+
+## ⏱️ 6-Second Dual-Link Telemetry Pipeline
+
+The node operates on a **6-second cadence (`6000 ms`)** with dual-link transmission:
+1. **Link A (USB Cable Mode):** Emits structured JSON strings over Serial at `115200` baud. Consumed by `scripts/serial_bridge.py` and forwarded via HTTP POST.
+2. **Link B (Wireless Hotspot Mode):** ESP32 connects directly to Wi-Fi hotspot (`jj`) and issues an HTTP POST to `http://<gateway_ip>:5000/api/sensors/telemetry` with header `X-Device-Token: plant-lab-auth-token-9981`.
+3. **Multi-Board Fusion:** If multiple nodes report (e.g. ESP32-CAM optical node + USB-C sensor node), the backend automatically fuses readings so missing metrics preserve their latest verified state.
+
+```json
+{
+  "device_id": "esp32-sensor-01",
+  "plant_id": "test-specimen-1",
+  "temperature_c": 24.8,
+  "humidity_pct": 61.2,
+  "soil_moisture_pct": 58.4,
+  "soil_raw_adc": 2150,
+  "light_lux": 1450.0,
+  "light_condition": "Daylight / Partly Cloudy",
+  "soil_condition": "Optimal Root Moisture",
+  "temp_condition": "Optimal Plant Temp",
+  "humidity_condition": "Ideal Canopy Humidity",
+  "climate": "Partly Cloudy & Pleasant",
+  "water_reservoir_ok": true
+}
+```
+
+---
+
+## 🚀 Quick Start Guide
+
+### 1. Prerequisites & Environment Setup
+```powershell
+# Clone the repository
+git clone https://github.com/sam-black007/SYNTERRA.git
+cd SYNTERRA
+
+# Create virtual environment and activate
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# Install backend dependencies
+pip install -r requirements.txt
+
+# Configure secrets
+copy .env.example .env
+# Set PLANT_API_KEY and DEVICE_TOKEN inside .env
+```
+
+### 2. Start the SYNTERRA Server
+```powershell
+# Double-click start.bat or execute:
+python run.py
+```
+Open **`http://localhost:5000/dashboard`** to access the real-time React console.
+
+### 3. Flash the ESP32 Firmware
+1. Open `firmware/Sensor_Hardware_Diagnostic/Sensor_Hardware_Diagnostic.ino` in Arduino IDE.
+2. Select Board: **ESP32 Dev Module**.
+3. Install required libraries via Library Manager:
+   - `DHT sensor library` by Adafruit
+   - `BH1750` by Christopher Laws
+4. Verify Wi-Fi credentials match your hotspot (`jj` / `123456789`).
+5. Select your COM Port and click **Upload**.
+
+### 4. Run the Serial Bridge (Optional / USB Mode)
+```powershell
+python scripts/serial_bridge.py
+```
+
+---
+
+## 📡 API Reference
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/dashboard` | `GET` | **Real-Time React 18 Operations Console** |
+| `/api/sensors/telemetry` | `POST` | Ingest sensor telemetry JSON (`X-Device-Token` header) |
+| `/api/sensors/latest` | `GET` | Retrieve latest fused sensor readings with condition badges |
+| `/api/sensors/history` | `GET` | Historical telemetry records (`?limit=50`) |
+| `/api/sensors/export/csv`| `GET` | Export complete sensor history as CSV |
+| `/api/diagnose` | `POST` | Upload leaf photo &rarr; Kindwise Crop.Health disease detection |
+| `/api/diagnoses` | `GET` | List all historical pathology diagnoses |
+| `/api/diagnosis/<id>/pdf`| `GET` | **Download Official PDF Pathology Dossier with Treatment Plan** |
+| `/api/irrigation/status` | `GET` | Read solenoid pump state, countdown & safety interlocks |
+| `/api/irrigation/manual` | `POST` | Execute timed manual irrigation pulse (5s–30s) |
+| `/api/irrigation/emergency_stop` | `POST` | Instant solenoid pump emergency shutoff |
+| `/api/camera/stream` | `GET` | Real-time optical MJPEG video stream |
+| `/api/camera/capture` | `POST` | Capture frame from camera node & run AI diagnosis |
+
+---
+
+## 🛠️ Technology Stack
+
+* **Embedded Firmware:** ESP32 C++ (Arduino Core), FreeRTOS, Hardware I2C Wire, DHT sensor library, BH1750.
+* **Backend Services:** Python 3.12, Flask 3.0, Flask-SocketIO, SQLAlchemy ORM, SQLite.
+* **Frontend Application:** React 18, Vite, Tailwind CSS, Recharts, Lucide Icons, Socket.IO Client.
+* **AI & Computer Vision:** Kindwise Crop.Health API / Plant.id, ReportLab PDF generation engine.
+* **Protocols & Buses:** WebSocket (WSS), REST JSON, USB-UART CDC, Hardware I2C, 12-bit SAR ADC.
+
+---
+
+## 📄 License & Attribution
+
+Designed and engineered for precision autonomous agriculture. All rights reserved.
