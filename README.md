@@ -132,7 +132,7 @@ To replicate this exact setup, source the following standard, low-cost component
 ## 🔌 Hardware Setup & Pinout Guide
 
 <p align="center">
-  <img src="docs/images/esp32_hardware_setup.jpg" alt="SYNTERRA ESP32 Hardware Node" width="380px" style="border-radius: 12px; box-shadow: 0 6px 25px rgba(0,0,0,0.5);" />
+  <img src="docs/images/esp32_hardware_setup.jpg" alt="SYNTERRA ESP32 Hardware Node" width="520px" style="border-radius: 12px; box-shadow: 0 6px 25px rgba(0,0,0,0.5);" />
 </p>
 
 ### Exact Pin Connection Table
