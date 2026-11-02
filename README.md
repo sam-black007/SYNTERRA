@@ -31,14 +31,13 @@ SYNTERRA is an enterprise-grade IoT and AI-driven precision agriculture platform
    - [Daily Light Integral (DLI) & Photoperiod Accumulator](#3-daily-light-integral-dli--photoperiod-accumulator)
    - [Closed-Loop Autonomous Irrigation & Safety Watchdog](#4-closed-loop-autonomous-irrigation-policy)
    - [Dual-Engine AI Leaf Pathology (Gemini Multimodal + Kindwise)](#5-dual-engine-ai-computer-vision-leaf-pathology)
-   - [Geospatial Pedology & Soil Science (ISRIC SoilGrids + USDA)](#6-geospatial-pedology--soil-science-isric-soilgrids--usda)
-   - [Authoritative GBIF Biodiversity Taxonomy Verification](#7-authoritative-biodiversity-taxonomy-verification-gbif)
-   - [Solar Irradiance (DNI/GHI) & Microclimate Radiative Flux](#8-solar-irradiance-dnighi--microclimate-radiative-flux-open-meteo)
-   - [FAO-56 Penman-Monteith Evapotranspiration ($ET_0$) & Soil Water Depletion](#9-fao-56-penman-monteith-evapotranspiration-et0--soil-water-depletion)
-   - [Predictive Fungal Spore Incubation Risk (Smith Period & Mills Model)](#10-predictive-fungal-spore-incubation-risk-meter-smith-period--mills-model)
-   - [Growing Degree Days (GDD) & BBCH Crop Phenology Tracker](#11-growing-degree-days-gdd--bbch-crop-phenology-stage-tracker)
-   - [Multi-Zone / Multi-Node Greenhouse Fleet Management](#12-multi-zone--multi-node-greenhouse-fleet-management)
-   - [Telegram Remote Farm Manager & Alert Bot with 2-Way Commands](#13-telegram-remote-farm-manager--alert-bot-with-2-way-commands)
+   - [Authoritative GBIF Biodiversity Taxonomy Verification](#6-authoritative-biodiversity-taxonomy-verification-gbif)
+   - [Solar Irradiance (DNI/GHI) & Microclimate Radiative Flux](#7-solar-irradiance-dnighi--microclimate-radiative-flux-open-meteo)
+   - [FAO-56 Penman-Monteith Evapotranspiration ($ET_0$) & Soil Water Depletion](#8-fao-56-penman-monteith-evapotranspiration-et0--soil-water-depletion)
+   - [Predictive Fungal Spore Incubation Risk (Smith Period & Mills Model)](#9-predictive-fungal-spore-incubation-risk-meter-smith-period--mills-model)
+   - [Growing Degree Days (GDD) & BBCH Crop Phenology Tracker](#10-growing-degree-days-gdd--bbch-crop-phenology-stage-tracker)
+   - [Multi-Zone / Multi-Node Greenhouse Fleet Management](#11-multi-zone--multi-node-greenhouse-fleet-management)
+   - [Telegram Remote Farm Manager & Alert Bot with 2-Way Commands](#12-telegram-remote-farm-manager--alert-bot-with-2-way-commands)
 8. [System Architecture Flowcharts](#-system-architecture-flowcharts)
 9. [Complete REST API Reference](#-api-reference)
 10. [Troubleshooting & FAQ](#-troubleshooting--faq)
@@ -432,23 +431,10 @@ SYNTERRA features an enterprise dual-inference architecture allowing users to dy
   * Specialized botanical neural network trained on millions of agricultural specimens, delivering rapid classification of infectious foliar lesions.
 * **Clinical PDF Dossier Generator:** Exports printable diagnostic dossiers (`/api/diagnosis/<id>/pdf`) detailing chemical MOAs (Modes of Action), safety intervals, and integrated pest management (IPM) practices.
 
----
-
-### 6. Geospatial Pedology & Soil Science (ISRIC SoilGrids + USDA)
-
-SYNTERRA integrates georeferenced pedological data from the **ISRIC SoilGrids World Soil Information REST API**, mapped through the official **USDA Soil Texture Triangle**:
-
-* **Mathematical Texture Classification:** Determines soil classification (*Sandy Loam*, *Clay Loam*, *Silt Loam*, etc.) using fractional ternary boundaries:
-  $$\text{Sand \%} + \text{Silt \%} + \text{Clay \%} = 100\%$$
-* **Pedological Substrate Parameters:**
-  * Native Substrate pH in Water ($pH_{\text{H}_2\text{O}}$) & category rating (*Slightly Acidic / Optimal Bioavailability*).
-  * Bulk density ($g/cm^3$) indicating rhizosphere compaction and aeration.
-  * Natural drainage capacity and customized substrate watering strategies (*deeper, spaced irrigation pulses vs. frequent shallow wetting*).
-* **Automatic Regional Fallback:** Smooth fallback to regional pedological models ensures zero-downtime operation even during SoilGrids server maintenance.
 
 ---
 
-### 7. Authoritative Biodiversity Taxonomy Verification (GBIF)
+### 6. Authoritative Biodiversity Taxonomy Verification (GBIF)
 
 To prevent misidentification and ensure botanical rigour, SYNTERRA cross-verifies all monitored crops against the **Global Biodiversity Information Facility (GBIF) Backbone Taxonomy**:
 
@@ -459,7 +445,7 @@ To prevent misidentification and ensure botanical rigour, SYNTERRA cross-verifie
 
 ---
 
-### 8. Solar Irradiance (DNI/GHI) & Microclimate Radiative Flux (Open-Meteo)
+### 7. Solar Irradiance (DNI/GHI) & Microclimate Radiative Flux (Open-Meteo)
 
 SYNTERRA correlates ambient photometric Lux measured by the on-site BH1750 with global shortwave radiative models via **Open-Meteo Solar Radiation Reanalysis**:
 
@@ -470,7 +456,7 @@ SYNTERRA correlates ambient photometric Lux measured by the on-site BH1750 with 
 
 ---
 
-### 9. FAO-56 Penman-Monteith Evapotranspiration ($ET_0$) & Soil Water Depletion
+### 8. FAO-56 Penman-Monteith Evapotranspiration ($ET_0$) & Soil Water Depletion
 
 SYNTERRA implements the internationally standardized **FAO-56 Penman-Monteith equation** (Food and Agriculture Organization Irrigation and Drainage Paper No. 56) to model reference evapotranspiration ($ET_0$) and predict soil moisture depletion rates:
 
@@ -495,7 +481,7 @@ $$ET_c = K_c \times ET_0$$
 
 ---
 
-### 10. Predictive Fungal Spore Incubation Risk Meter (Smith Period & Mills Model)
+### 9. Predictive Fungal Spore Incubation Risk Meter (Smith Period & Mills Model)
 
 Rather than waiting for visible disease lesions to appear, SYNTERRA computes real-time infection risk scores for airborne pathogens (*Alternaria solani* early blight, *Phytophthora infestans* late blight, *Botrytis cinerea* gray mold) using the **Smith Period criteria** and **Mills Infection Period models**:
 
@@ -511,7 +497,7 @@ Rather than waiting for visible disease lesions to appear, SYNTERRA computes rea
 
 ---
 
-### 11. Growing Degree Days (GDD) & BBCH Crop Phenology Stage Tracker
+### 10. Growing Degree Days (GDD) & BBCH Crop Phenology Stage Tracker
 
 SYNTERRA tracks the developmental aging of crops by accumulating thermal heat units (**Growing Degree Days - GDD**), eliminating guesswork based on calendar days:
 
@@ -528,7 +514,7 @@ $$GDD = \sum \max\left( \frac{T_{\max} + T_{\min}}{2} - T_{\text{base}}, 0 \righ
 
 ---
 
-### 12. Multi-Zone / Multi-Node Greenhouse Fleet Management
+### 11. Multi-Zone / Multi-Node Greenhouse Fleet Management
 
 For commercial and research multi-bay facilities, SYNTERRA supports multi-node greenhouse fleet management:
 
@@ -541,7 +527,7 @@ For commercial and research multi-bay facilities, SYNTERRA supports multi-node g
 
 ---
 
-### 13. Telegram Remote Farm Manager & Alert Bot with 2-Way Commands
+### 12. Telegram Remote Farm Manager & Alert Bot with 2-Way Commands
 
 <p align="center">
   <img src="docs/images/telegram_bot_console_live.png" alt="SYNTERRA Telegram Remote Farm Manager & Alert Bot Console" width="90%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);" />
@@ -642,7 +628,6 @@ flowchart TD
 flowchart LR
     subgraph External_APIs ["External Scientific & AI APIs"]
         GBIF["GBIF Backbone API<br/>Canonical Taxonomy"]
-        SOIL["ISRIC SoilGrids API<br/>Sand/Silt/Clay & pH"]
         METEO["Open-Meteo API<br/>DNI/GHI Solar Flux & Soil Temp"]
         GEMINI["Google Gemini Vision API<br/>Zero-Shot Multimodal Pathology"]
     end
@@ -683,7 +668,6 @@ flowchart LR
 | `/api/sensors/export/csv`| `GET` | &mdash; | Export complete sensor history as CSV |
 | `/api/diagnose` | `POST` | &mdash; | Upload leaf photo &rarr; Kindwise Crop.Health disease detection |
 | `/api/diagnose/multimodal`| `POST`| &mdash; | **Google Gemini Multimodal AI leaf pathology & active ingredients** |
-| `/api/soil/geospatial` | `GET` | &mdash; | **Query ISRIC SoilGrids for USDA soil texture, pH & drainage** |
 | `/api/biodiversity/species`| `GET` | &mdash; | **Query GBIF for authoritative botanical taxonomic hierarchy** |
 | `/api/weather/solar` | `GET` | &mdash; | **Query Open-Meteo for Direct Normal & Global Solar Irradiance** |
 | `/api/diagnoses` | `GET` | &mdash; | List all historical pathology diagnoses |

@@ -1362,172 +1362,92 @@ export default function App() {
               </div>
             )}
 
-            {/* Geospatial Pedology (ISRIC SoilGrids) & Solar Flux (Open-Meteo) Card */}
+            {/* Solar Radiation & Microclimate Radiative Flux (Open-Meteo) Card */}
             <div className="bg-[#0c1424] border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-xl bg-amber-950/60 text-amber-400 border border-amber-800/40">
-                    <Layers className="w-4 h-4" />
+                    <Sun className="w-4 h-4" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-white text-sm">Geospatial Pedology & Solar Radiation Intelligence</h3>
-                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/30">
-                        ISRIC SoilGrids + Open-Meteo
+                      <h3 className="font-bold text-white text-sm">Solar Radiation &amp; Shortwave Radiative Flux Intelligence</h3>
+                      <span className="text-[10px] font-mono text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/30">
+                        Open-Meteo Solar Reanalysis
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Georeferenced soil texture physics (USDA Triangle) synthesized with real-time shortwave solar irradiance and outdoor substrate temperatures.
+                      Direct normal irradiance (DNI), global horizontal irradiance (GHI), and outdoor substrate temperatures correlated with on-site BH1750 photometrics.
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
-                    13.08°N, 80.27°E
+                    13.08&deg;N, 80.27&deg;E
                   </span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* ISRIC SoilGrids Panel */}
-                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
-                      <Sprout className="w-3.5 h-3.5" />
-                      <span>ISRIC Pedological Soil Classification</span>
-                    </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950/50 text-amber-400 border border-amber-800/40 font-bold">
-                      USDA: {soilGeospatial?.texture_class || 'Sandy Loam'}
+              {/* 4 Solar & Microclimate Metric Pods */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span>Direct Normal (DNI)</span>
+                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  </div>
+                  <div className="mt-1.5 flex items-baseline gap-1">
+                    <span className="text-2xl font-black text-white font-mono">
+                      {solarWeather?.direct_normal_irradiance_w_m2 ?? 0.0}
                     </span>
+                    <span className="text-xs text-slate-400 font-mono">W/m²</span>
                   </div>
-
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    {soilGeospatial?.agronomic_description || 'Well-drained; rapid warm-up; ideal for root crops and fruiting solanaceae.'}
-                  </p>
-
-                  {/* Sand / Silt / Clay Composition Multi-segment bar */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
-                      <span>Soil Texture Triangle Fractions:</span>
-                      <span className="text-white font-bold">
-                        Sand {soilGeospatial?.composition?.sand_pct ?? 58}% | Silt {soilGeospatial?.composition?.silt_pct ?? 26}% | Clay {soilGeospatial?.composition?.clay_pct ?? 16}%
-                      </span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-800 flex overflow-hidden">
-                      <div
-                        style={{ width: `${soilGeospatial?.composition?.sand_pct ?? 58}%` }}
-                        className="bg-amber-500 h-full"
-                        title="Sand Fraction"
-                      />
-                      <div
-                        style={{ width: `${soilGeospatial?.composition?.silt_pct ?? 26}%` }}
-                        className="bg-teal-500 h-full"
-                        title="Silt Fraction"
-                      />
-                      <div
-                        style={{ width: `${soilGeospatial?.composition?.clay_pct ?? 16}%` }}
-                        className="bg-rose-500 h-full"
-                        title="Clay Fraction"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-center">
-                    <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
-                      <span className="text-[10px] text-slate-500 uppercase font-mono block">Native pH</span>
-                      <span className="text-sm font-bold text-emerald-400 font-mono">
-                        {soilGeospatial?.ph_water ?? 6.4} pH
-                      </span>
-                    </div>
-                    <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
-                      <span className="text-[10px] text-slate-500 uppercase font-mono block">Bulk Density</span>
-                      <span className="text-sm font-bold text-white font-mono">
-                        {soilGeospatial?.bulk_density_g_cm3 ?? 1.38} g/cm³
-                      </span>
-                    </div>
-                    <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
-                      <span className="text-[10px] text-slate-500 uppercase font-mono block">Drainage</span>
-                      <span className="text-sm font-bold text-cyan-400 font-mono">
-                        {soilGeospatial?.drainage_rating?.split(' ')[0] ?? 'Moderate'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="text-[11px] text-slate-400 pt-1 flex items-center justify-between">
-                    <span>Irrigation Strategy: <strong className="text-slate-200">{soilGeospatial?.recommended_watering_approach || 'Deeper, spaced irrigation pulses'}</strong></span>
-                    <span className="text-[10px] text-slate-500 font-mono">{soilGeospatial?.source || 'ISRIC SoilGrids'}</span>
-                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Direct beam solar flux</p>
                 </div>
 
-                {/* Open-Meteo Solar & Microclimate Panel */}
-                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
-                      <Sun className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Solar Irradiance & Microclimate Flux</span>
-                    </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/40 font-bold">
-                      Live Ground-Truth
+                <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span>Global Horiz. (GHI)</span>
+                    <Sun className="w-3.5 h-3.5 text-yellow-400" />
+                  </div>
+                  <div className="mt-1.5 flex items-baseline gap-1">
+                    <span className="text-2xl font-black text-white font-mono">
+                      {solarWeather?.global_horizontal_irradiance_w_m2 ?? 0.0}
+                    </span>
+                    <span className="text-xs text-slate-400 font-mono">W/m²</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Total hemispherical flux</p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span>Outdoor Soil Temp</span>
+                    <Thermometer className="w-3.5 h-3.5 text-emerald-400" />
+                  </div>
+                  <div className="mt-1.5 flex items-baseline gap-1">
+                    <span className="text-2xl font-bold text-emerald-400 font-mono">
+                      {solarWeather?.outdoor_soil_temp_c !== undefined ? `${solarWeather.outdoor_soil_temp_c}°C` : '24.5°C'}
                     </span>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
-                      <div className="flex items-center justify-between text-xs text-slate-400">
-                        <span>Direct Normal (DNI)</span>
-                        <Zap className="w-3.5 h-3.5 text-amber-400" />
-                      </div>
-                      <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl font-black text-white font-mono">
-                          {solarWeather?.direct_normal_irradiance_w_m2 ?? 0.0}
-                        </span>
-                        <span className="text-xs text-slate-400">W/m²</span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 mt-1">Direct beam solar flux</p>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
-                      <div className="flex items-center justify-between text-xs text-slate-400">
-                        <span>Global Horiz. (GHI)</span>
-                        <Sun className="w-3.5 h-3.5 text-yellow-400" />
-                      </div>
-                      <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl font-black text-white font-mono">
-                          {solarWeather?.global_horizontal_irradiance_w_m2 ?? 0.0}
-                        </span>
-                        <span className="text-xs text-slate-400">W/m²</span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 mt-1">Total hemispherical flux</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
-                      <span className="text-[10px] text-slate-400 uppercase font-mono block">Outdoor Soil Temp</span>
-                      <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-lg font-bold text-emerald-400 font-mono">
-                          {solarWeather?.outdoor_soil_temp_c !== undefined ? `${solarWeather.outdoor_soil_temp_c}°C` : '24.5°C'}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Topsoil profile (0–7cm)</p>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
-                      <span className="text-[10px] text-slate-400 uppercase font-mono block">Canopy Photometrics</span>
-                      <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-lg font-bold text-amber-400 font-mono">
-                          {latestTelemetry?.light_lux !== undefined ? `${latestTelemetry.light_lux} Lux` : '--'}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Physical BH1750 on-site</p>
-                    </div>
-                  </div>
-
-                  <div className="text-[11px] text-slate-400 pt-1 flex items-center justify-between">
-                    <span>Flux correlation with BH1750 photometer</span>
-                    <span className="text-emerald-400 font-medium">Calibrated Shortwave Spectrum</span>
-                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Topsoil profile (0–7cm)</p>
                 </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span>Canopy Photometrics</span>
+                    <Sun className="w-3.5 h-3.5 text-amber-400" />
+                  </div>
+                  <div className="mt-1.5 flex items-baseline gap-1">
+                    <span className="text-2xl font-bold text-amber-400 font-mono">
+                      {latestTelemetry?.light_lux !== undefined ? `${latestTelemetry.light_lux} Lux` : '--'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Physical BH1750 on-site</p>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-slate-400 pt-1 flex items-center justify-between border-t border-slate-800/60">
+                <span>Flux cross-correlation with on-site BH1750 sensor</span>
+                <span className="text-emerald-400 font-medium">Calibrated Shortwave Spectrum &bull; Open-Meteo Reanalysis</span>
               </div>
             </div>
 
