@@ -1460,36 +1460,50 @@ export default function App() {
                   </div>
 
                   {/* MJPEG Stream Container */}
-                  <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-black aspect-video flex items-center justify-center group">
-                    <img
-                      src="/api/camera/stream"
-                      alt="Live Optical Feed"
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = '/static/samples/tomato_blight.jpg';
-                      }}
-                    />
-                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur px-2 py-1 rounded text-[10px] font-mono text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                      <span>LIVE FEED</span>
-                    </div>
+                  <div className="relative rounded-xl overflow-hidden border border-slate-800/90 bg-[#070b13] aspect-video flex items-center justify-center group">
+                    {cameraStatus.hardware_online ? (
+                      <>
+                        <img
+                          src="/api/camera/stream"
+                          alt="Live Optical Feed"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-3 left-3 bg-black/60 backdrop-blur px-2 py-1 rounded text-[10px] font-mono text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                          <span>LIVE FEED</span>
+                        </div>
+                      </>
+                    ) : (
+                      /* Clean Blank Space When Hardware Camera Not Connected */
+                      <div className="flex flex-col items-center justify-center gap-2.5 text-center p-6 select-none">
+                        <div className="w-12 h-12 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-center text-slate-600">
+                          <Camera className="w-6 h-6 text-slate-500" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-slate-400">Optical Sensor Feed Standby</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">Awaiting ESP32-CAM / OV2640 hardware video stream</p>
+                        </div>
+                        <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-500">
+                          NO ACTIVE HARDWARE FEED
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Dynamic Network Station & Auto-Discovery Bar */}
                   <div className="mt-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Wifi className={`w-3.5 h-3.5 ${cameraStatus.hardware_online ? 'text-emerald-400' : 'text-amber-400'}`} />
+                        <Wifi className={`w-3.5 h-3.5 ${cameraStatus.hardware_online ? 'text-emerald-400' : 'text-slate-400'}`} />
                         <span className="font-semibold text-slate-300">Device Link:</span>
                         <span className="font-mono text-[11px] text-slate-300">{cameraStatus.camera_url || 'http://synterra-cam.local'}</span>
                       </div>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
                         cameraStatus.hardware_online
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                          : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
                       }`}>
-                        {cameraStatus.hardware_online ? 'ESP32-S3 LIVE' : 'SYNTHETIC HUD'}
+                        {cameraStatus.hardware_online ? 'ESP32-S3 LIVE' : 'FEED STANDBY'}
                       </span>
                     </div>
 

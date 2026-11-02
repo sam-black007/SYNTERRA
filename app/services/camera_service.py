@@ -133,47 +133,19 @@ class CameraService:
             return False
 
     def generate_synthetic_frame(self, telemetry=None):
-        """Generate high-contrast Ag-Tech HUD camera frame."""
-        img = Image.new('RGB', (self.width, self.height), color=(18, 28, 22))
+        """Generate clean dark blank standby frame."""
+        img = Image.new('RGB', (self.width, self.height), color=(10, 15, 24))
         draw = ImageDraw.Draw(img)
 
-        # Draw grid
-        for x in range(40, self.width, 40):
-            draw.line([(x, 0), (x, self.height)], fill=(25, 42, 32), width=1)
-        for y in range(40, self.height, 40):
-            draw.line([(0, y), (self.width, y)], fill=(25, 42, 32), width=1)
+        # Subtle dark border
+        draw.rectangle([(2, 2), (self.width - 3, self.height - 3)], outline=(22, 32, 48), width=1)
 
-        # Draw simulated plant specimen silhouette in center
+        # Minimalist standby label in center
         cx, cy = self.width // 2, self.height // 2
-        draw.line([(cx, cy + 120), (cx, cy - 20)], fill=(34, 139, 34), width=6)
-        draw.polygon([(cx, cy + 30), (cx - 90, cy), (cx, cy - 40)], fill=(46, 125, 50))
-        draw.polygon([(cx, cy + 10), (cx + 90, cy - 20), (cx, cy - 60)], fill=(56, 142, 60))
-        draw.polygon([(cx, cy - 20), (cx - 60, cy - 80), (cx, cy - 110)], fill=(76, 175, 80))
-        draw.polygon([(cx, cy - 40), (cx + 60, cy - 90), (cx, cy - 130)], fill=(67, 160, 71))
-
-        # Viewfinder Reticle / Crosshairs
-        draw.line([(cx - 40, cy), (cx + 40, cy)], fill=(0, 255, 128), width=1)
-        draw.line([(cx, cy - 40), (cx, cy + 40)], fill=(0, 255, 128), width=1)
-        draw.rectangle([(cx - 80, cy - 80), (cx + 80, cy + 80)], outline=(0, 255, 128), width=1)
-
-        # HUD Text Overlay
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        cam_source = "ESP32-S3 LIVE" if self._is_hardware_available else "SYNTHETIC HUD // OV2640"
-        draw.text((15, 15), f"SYNTERRA OPTICAL HUD // {cam_source}", fill=(0, 255, 128))
-        draw.text((15, 32), f"REC: {timestamp} UTC  |  FPS: 15.0", fill=(180, 220, 190))
-
-        if telemetry:
-            temp = telemetry.get('temperature_c', '--')
-            hum = telemetry.get('humidity_pct', '--')
-            lux = telemetry.get('light_lux', '--')
-            soil = telemetry.get('soil_moisture_pct', '--')
-            telemetry_str = f"T: {temp}C | RH: {hum}% | LUX: {lux} | SOIL: {soil}%"
-            draw.text((15, self.height - 30), telemetry_str, fill=(0, 255, 128))
-        else:
-            draw.text((15, self.height - 30), "SYS: LIVE TELEMETRY ARMED", fill=(0, 255, 128))
+        draw.text((cx - 150, cy - 8), "OPTICAL SENSOR STANDBY // NO ACTIVE FEED", fill=(65, 85, 110))
 
         buf = io.BytesIO()
-        img.save(buf, format='JPEG', quality=80)
+        img.save(buf, format='JPEG', quality=85)
         return buf.getvalue()
 
     def capture_frame(self, telemetry=None):
