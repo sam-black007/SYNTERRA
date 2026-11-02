@@ -72,7 +72,7 @@ class PlantIdClient:
                 'message': f'Cannot reach Plant.id API: {str(e)}',
             }
 
-    def identify(self, image_bytes, filename='leaf.jpg', plant_details=True):
+    def identify(self, image_bytes, filename='leaf.jpg'):
         """Send an image to crop.health API v1 for disease identification.
 
         Uses asynchronous two-step flow:
@@ -93,8 +93,8 @@ class PlantIdClient:
             headers = {'Api-Key': self.api_key}
             files = {'images': (filename, image_bytes, 'image/jpeg')}
             data = {}
-            if plant_details:
-                data['plant_details'] = 'true'
+            # crop.health API v1 supports 'similar_images' modifier
+            data['similar_images'] = 'true'
 
             resp = requests.post(url, headers=headers, files=files, data=data, timeout=30)
 
