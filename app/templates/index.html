@@ -34,10 +34,10 @@
         <tbody>
             {% for d in recent %}
             <tr>
-                <td>{{ d.plant_name }}</td>
+                <td><a href="{{ url_for('main.diagnosis_detail', diag_id=d.id) }}" style="color: inherit; text-decoration: underline;"><strong>{{ d.plant_name }}</strong></a></td>
                 <td>{{ d.disease_name or 'Unknown' }}</td>
                 <td>{{ '%.1f%%' % d.confidence if d.confidence else 'N/A' }}</td>
-                <td>{{ d.created_at[:16] if d.created_at else 'N/A' }}</td>
+                <td>{{ d.created_at.strftime('%Y-%m-%d %H:%M') if d.created_at else 'N/A' }}</td>
             </tr>
             {% endfor %}
         </tbody>
