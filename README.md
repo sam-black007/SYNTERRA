@@ -1,9 +1,9 @@
 # SYNTERRA
-### Agricultural Intelligence &mdash; Plant Disease Detection
+### Agricultural Intelligence &mdash; Plant Disease Detection & Autonomous Monitoring
 
 **Engineering Intelligence for a Growing World.**
 
-Minimal, production-ready Flask backend with **real Plant.id API** disease detection. No demo mode, no simulated diagnoses &mdash; every result comes from the Plant.id / Kindwise crop.health API.
+Minimal, production-ready Flask backend with **real Kindwise crop.health / Plant.id API** disease detection, ESP32-S3 sensor client firmware, and USB serial telemetry ingestion.
 
 ## Quick Start
 
@@ -21,9 +21,9 @@ pip install -r requirements.txt
 
 # Configure API key
 copy .env.example .env
-# Edit .env and add your Plant.id API key: PLANT_API_KEY=your_key_here
+# Edit .env and configure your PLANT_API_KEY and DEVICE_TOKEN
 
-# Run
+# Run the Flask backend
 python run.py
 ```
 
@@ -43,28 +43,44 @@ Open `http://localhost:5000`
 | `/api/diagnose` | POST | Upload image → real Plant.id diagnosis |
 | `/api/diagnoses` | GET | List all saved diagnoses |
 | `/api/diagnosis/<id>` | GET | Get single diagnosis as JSON |
+| `/api/sensors/telemetry` | POST | Ingest ESP32 telemetry (`X-Device-Token` auth) |
+| `/api/sensors/latest` | GET | Get most recent sensor reading |
+| `/api/sensors/history` | GET | Get historical sensor readings (`?limit=50`) |
 
-## Getting a Plant.id API Key
+## Hardware & Telemetry Bridge
+
+### 1. ESP32-S3 Firmware
+Located at `firmware/ESP32_Sensor_Client/ESP32_Sensor_Client.ino`:
+- **DHT11**: Temperature & humidity on GPIO 2
+- **BH1750**: Ambient light (lux) on I2C (SDA GPIO 4, SCL GPIO 5)
+- **FC-28**: Soil moisture on GPIO 1 (Analog AO) and GPIO 40 (DO)
+- **Water Reservoir Switch**: GPIO 41
+- Emits structured JSON strings over Serial at 115200 baud every 10 seconds.
+- Built-in `SIMULATION_MODE` toggle for bench testing without attached hardware.
+
+### 2. Serial Bridge
+Run the Python serial bridge to forward ESP32 USB telemetry directly into the Flask API:
+```powershell
+# Auto-detects connected ESP32 COM port and forwards telemetry
+python scripts/serial_bridge.py
+
+# Or test without hardware in synthetic mock mode:
+python scripts/serial_bridge.py --mock
+```
+
+## Getting a Plant.id / Crop.health API Key
 
 1. Sign up at [plant.id](https://plant.id) or [kindwise.com](https://kindwise.com)
-2. Create an API key in your dashboard
+2. Create an API key in your Kindwise dashboard
 3. Add it to `.env`: `PLANT_API_KEY=your_key_here`
-4. Test the connection at `/integrations`
+4. Test the connection at `/integrations` or `POST /api/integrations/plantid/test`
 
 ## Tech Stack
 
 - Flask 3 + Flask-SQLAlchemy + Flask-WTF
-- python-dotenv, requests
-- SQLite database
-- Vanilla HTML/CSS (no build step)
-
-## What's Included
-
-- Real Plant.id disease identification (no fakes)
-- API key validation without consuming credits
-- Diagnosis history stored in SQLite
-- Image upload + result display
-- Raw API response saved for debugging
+- python-dotenv, requests, Pillow, pyserial
+- SQLite database (`instance/plant_doctor.db`)
+- ESP32-S3 Arduino C++ firmware
 
 ---
 

@@ -27,17 +27,27 @@
 - [x] Commit all local changes
 - [x] Push to `sam-black007/SYNTERRA` (main branch)
 
-## Phase 4: Future Enhancements
-- [ ] ESP32-S3 sensor client firmware (DHT11, BH1750, FC-28)
-- [ ] Serial bridge script (`scripts/serial_bridge.py`)
-- [ ] React + WebSocket dashboard
-- [ ] Camera MJPEG stream integration
-- [ ] Irrigation control endpoints
+## Phase 4: Hardware & Real-Time Telemetry
+### Immediate Priorities (Done)
+- [x] `SensorReading` Model (`app/models/sensor.py`) — temperature, humidity, lux, soil moisture, raw ADC, reservoir status
+- [x] ESP32 Telemetry Endpoint (`POST /api/sensors/telemetry`, `GET /api/sensors/latest`, `GET /api/sensors/history`) with `X-Device-Token` auth
+- [x] Serial Bridge Script (`scripts/serial_bridge.py`) — USB Serial reader + auto-detect + simulation fallback
+- [x] ESP32-S3 sensor client firmware (`firmware/ESP32_Sensor_Client/ESP32_Sensor_Client.ino`) — DHT11, BH1750, FC-28, simulation mode
+
+### Medium Priorities (Next)
+- [ ] React + WebSocket dashboard (Vite + Tailwind + Flask-SocketIO)
+- [ ] Camera MJPEG stream integration (`GET /api/camera/stream`, `POST /api/camera/capture`)
+- [ ] Irrigation control endpoints (`POST /api/irrigation/manual`, `POST /api/irrigation/emergency_stop` with safety interlocks)
+
+### Lower Priority
+- [ ] Dossier reports (PDF export via ReportLab, CSV telemetry logs)
+- [ ] Device management inventory page (`/devices`)
+- [ ] UI Settings page (`/settings`)
 
 ---
 
-**Repo:** https://github.com/sam-black007/SYNTERRA
-**Local path:** `D:\ml challenge\SYNTERRA`
-**API Key:** Configured locally in `.env` (gitignored, 64 credits remaining)
-**API URL:** `https://crop.kindwise.com/api/v1` (from your dashboard)
-**Issue resolved:** crop.health v1 async identify flow working correctly
+**Repo:** https://github.com/sam-black007/SYNTERRA  
+**Local path:** `D:\ml challenge\SYNTERRA`  
+**API Key:** Configured locally in `.env` (gitignored, 64 credits remaining)  
+**API URL:** `https://crop.kindwise.com/api/v1` (from your dashboard)  
+**Issue resolved:** crop.health v1 async identify flow working correctly  

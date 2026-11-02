@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from app import db
 from app.models.diagnosis import Diagnosis
+from app.models.sensor import SensorReading
 from app.services.plantid_client import PlantIdClient
 
 api_bp = Blueprint('api', __name__)
@@ -96,3 +97,100 @@ def list_diagnoses():
 def get_diagnosis(diag_id):
     diag = Diagnosis.query.get_or_404(diag_id)
     return jsonify(diag.to_dict()), 200
+
+
+# ============================================================================
+# ESP32 Sensor Telemetry Endpoints
+# ============================================================================
+
+def _verify_device_token():
+    expected_token = current_app.config.get('DEVICE_TOKEN', '')
+    if not expected_token:
+        return True  # If no token configured, allow in dev mode
+
+    auth_header = request.headers.get('X-Device-Token', '')
+    if not auth_header and request.headers.get('Authorization', '').startswith('Bearer '):
+        auth_header = request.headers.get('Authorization')[7:].strip()
+
+    return auth_header == expected_token
+
+
+@api_bp.route('/sensors/telemetry', methods=['POST'])
+def receive_telemetry():
+    """Ingest sensor telemetry from ESP32 or serial bridge."""
+    if not _verify_device_token():
+        return jsonify({
+            'success': False,
+            'error': 'UNAUTHORIZED',
+            'message': 'Invalid or missing X-Device-Token header.',
+        }), 401
+
+    payload = request.get_json(silent=True)
+    if not payload:
+        return jsonify({
+            'success': False,
+            'error': 'INVALID_JSON',
+            'message': 'Request body must be valid JSON.',
+        }), 400
+
+    def _get_field(keys, default=None):
+        for k in keys:
+            if k in payload and payload[k] is not None:
+                return payload[k]
+        return default
+
+    reading = SensorReading(
+        device_id=_get_field(['device_id'], 'esp32-sensor-01'),
+        plant_id=_get_field(['plant_id']),
+        temperature_c=_get_field(['temperature_c', 'temperature', 'temp']),
+        humidity_pct=_get_field(['humidity_pct', 'humidity']),
+        light_lux=_get_field(['light_lux', 'lux', 'light']),
+        soil_moisture_pct=_get_field(['soil_moisture_pct', 'soil_moisture', 'soil_pct']),
+        soil_raw_adc=_get_field(['soil_raw_adc', 'soil_adc', 'raw_adc']),
+        water_reservoir_ok=_get_field(['water_reservoir_ok', 'water_ok', 'reservoir_ok'], True),
+    )
+
+    db.session.add(reading)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Telemetry recorded successfully.',
+        'reading': reading.to_dict(),
+    }), 201
+
+
+@api_bp.route('/sensors/latest', methods=['GET'])
+def get_latest_telemetry():
+    """Get the most recent sensor reading."""
+    device_id = request.args.get('device_id')
+    query = SensorReading.query
+    if device_id:
+        query = query.filter_by(device_id=device_id)
+
+    latest = query.order_by(SensorReading.timestamp.desc()).first()
+    if not latest:
+        return jsonify({'success': True, 'reading': None}), 200
+
+    return jsonify({'success': True, 'reading': latest.to_dict()}), 200
+
+
+@api_bp.route('/sensors/history', methods=['GET'])
+def get_sensor_history():
+    """Get historical sensor readings with optional limit."""
+    try:
+        limit = min(int(request.args.get('limit', 50)), 500)
+    except ValueError:
+        limit = 50
+
+    device_id = request.args.get('device_id')
+    query = SensorReading.query
+    if device_id:
+        query = query.filter_by(device_id=device_id)
+
+    readings = query.order_by(SensorReading.timestamp.desc()).limit(limit).all()
+    return jsonify({
+        'success': True,
+        'count': len(readings),
+        'readings': [r.to_dict() for r in readings],
+    }), 200
