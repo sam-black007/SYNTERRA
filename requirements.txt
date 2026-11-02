@@ -5,3 +5,5 @@ python-dotenv==1.0.1
 Pillow==10.4.0
 requests==2.32.3
 pyserial==3.5
+flask-socketio>=5.3.6
+simple-websocket>=1.1.0

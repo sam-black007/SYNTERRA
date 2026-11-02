@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request, current_app
-from app import db
+from app import db, socketio
 from app.models.diagnosis import Diagnosis
 from app.models.sensor import SensorReading
 from app.services.plantid_client import PlantIdClient
@@ -92,6 +92,11 @@ def diagnose():
     db.session.add(diag)
     db.session.commit()
 
+    try:
+        socketio.emit('diagnosis_update', diag.to_dict())
+    except Exception as e:
+        current_app.logger.warning(f"SocketIO diagnosis emit warning: {e}")
+
     return jsonify({
         'success': True,
         'diagnosis': diag.to_dict(),
@@ -166,6 +171,11 @@ def receive_telemetry():
 
     db.session.add(reading)
     db.session.commit()
+
+    try:
+        socketio.emit('telemetry_update', reading.to_dict())
+    except Exception as e:
+        current_app.logger.warning(f"SocketIO telemetry emit warning: {e}")
 
     return jsonify({
         'success': True,

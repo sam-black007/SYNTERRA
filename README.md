@@ -33,7 +33,8 @@ Open `http://localhost:5000`
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | Dashboard with recent diagnoses |
+| `/dashboard` | GET | **React + WebSocket Real-Time Laboratory Console** |
+| `/` | GET | Classic dashboard with recent diagnoses |
 | `/pathology` | GET/POST | Upload leaf image for real disease detection |
 | `/diagnosis/<id>` | GET | View saved diagnosis result |
 | `/integrations` | GET | Configure & test Plant.id API key |
@@ -46,6 +47,14 @@ Open `http://localhost:5000`
 | `/api/sensors/telemetry` | POST | Ingest ESP32 telemetry (`X-Device-Token` auth) |
 | `/api/sensors/latest` | GET | Get most recent sensor reading |
 | `/api/sensors/history` | GET | Get historical sensor readings (`?limit=50`) |
+
+## Real-Time React Dashboard
+
+Built with React 18, Vite, Tailwind CSS, Recharts, and Flask-SocketIO:
+- **Live WebSocket Streaming**: Metrics update automatically as telemetry packets arrive over USB Serial or HTTP.
+- **Dynamic Gauges**: Air Temperature, Relative Humidity, Soil Moisture (FC-28), Ambient Light (BH1750), and Reservoir Interlock Status.
+- **Dual Time-Series Charts**: Micro-climate curves and root-zone/photometrics tracking.
+- Access directly at: **`http://localhost:5000/dashboard`**
 
 ## Hardware & Telemetry Bridge
 

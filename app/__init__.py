@@ -1,12 +1,14 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, send_from_directory, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
+from flask_socketio import SocketIO
 
 db = SQLAlchemy()
 csrf = CSRFProtect()
+socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")
 
 basedir = Path(__file__).resolve().parent.parent
 
@@ -31,10 +33,7 @@ def create_app():
 
     db.init_app(app)
     csrf.init_app(app)
-
-    # Ensure models are imported for db.create_all()
-    from app.models.diagnosis import Diagnosis
-    from app.models.sensor import SensorReading
+    socketio.init_app(app)
 
     # Register blueprints
     from app.routes.main import main_bp
@@ -43,6 +42,33 @@ def create_app():
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
     csrf.exempt(api_bp)  # API endpoints are used by ESP32, curl, mobile apps — no CSRF needed
+
+    # Serve built React dashboard if present
+    @app.route('/dashboard')
+    @app.route('/dashboard/')
+    @app.route('/dashboard/<path:path>')
+    def serve_dashboard(path=''):
+        dist_dir = basedir / 'frontend' / 'dist'
+        if path and (dist_dir / path).exists():
+            return send_from_directory(dist_dir, path)
+        if (dist_dir / 'index.html').exists():
+            return send_from_directory(dist_dir, 'index.html')
+        return redirect(url_for('main.index'))
+
+    # WebSocket connection handlers
+    @socketio.on('connect')
+    def handle_connect():
+        from app.models.sensor import SensorReading
+        latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+        if latest:
+            socketio.emit('telemetry_update', latest.to_dict())
+
+    @socketio.on('request_latest')
+    def handle_request_latest():
+        from app.models.sensor import SensorReading
+        latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+        if latest:
+            socketio.emit('telemetry_update', latest.to_dict())
 
     # Create tables
     with app.app_context():

@@ -51,6 +51,7 @@
                 <div class="tagline">Agricultural Intelligence &mdash; Plant Disease Detection</div>
             </div>
             <nav>
+                <a href="/dashboard" style="color: #38bdf8; font-weight: 600;">⚡ Live Console</a>
                 <a href="{{ url_for('main.index') }}" class="{% if request.endpoint == 'main.index' %}active{% endif %}">Dashboard</a>
                 <a href="{{ url_for('main.pathology') }}" class="{% if request.endpoint == 'main.pathology' %}active{% endif %}">Pathology</a>
                 <a href="{{ url_for('main.integrations') }}" class="{% if request.endpoint == 'main.integrations' %}active{% endif %}">Integrations</a>

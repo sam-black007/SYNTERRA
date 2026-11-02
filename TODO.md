@@ -21,16 +21,10 @@
   - `GET /api/sensors/latest` (most recent reading)
   - `GET /api/sensors/history` (chronological telemetry logs with `?limit=`)
 - [x] ESP32-S3 Sensor Client Firmware (`firmware/ESP32_Sensor_Client/ESP32_Sensor_Client.ino`):
-  - DHT11 (GPIO2)
-  - BH1750 (GPIO4 SDA, GPIO5 SCL)
-  - FC-28 Soil Moisture (GPIO1 AO, GPIO40 DO)
-  - Float switch (GPIO41)
-  - Toggleable `SIMULATION_MODE`
-  - 115200 baud JSON output every 10s
-- [x] USB Serial Bridge Script (`scripts/serial_bridge.py`):
-  - Auto-detection of ESP32 / USB-UART COM ports
-  - `--mock` synthetic simulation mode for hardwareless bench testing
-  - Automatic reconnection handling
+  - DHT11 (GPIO2), BH1750 (GPIO4/5), FC-28 Soil (GPIO1/40), Float switch (GPIO41)
+  - 115200 baud JSON serial emission every 10s
+  - Built-in `SIMULATION_MODE` toggle
+- [x] USB Serial Bridge Script (`scripts/serial_bridge.py`) with `--mock` simulation mode
 
 ## Phase 3: Testing & Verification Infrastructure (Completed & Verified)
 - [x] Automated full-stack monitoring script (`scripts/monitor_test.py`)
@@ -41,16 +35,21 @@
   - Top Pathology: `early blight` (*Alternaria solani*) — 97.58% confidence
   - Turnaround time: 1.53s (HTTP 200 OK)
 
-## Phase 4: Roadmap Priorities (Next Up)
-### Medium Priorities
-- [ ] React + WebSocket dashboard (Vite + Tailwind + Flask-SocketIO live gauges)
+## Phase 4: Real-Time Web Platform (Completed & Verified)
+- [x] React + WebSocket Live Dashboard (`frontend/`):
+  - React 18 + Vite + Tailwind CSS + Lucide Icons + Recharts
+  - Real-time WebSocket telemetry via `Flask-SocketIO` & `simple-websocket`
+  - Live animated metric cards (Temperature, Humidity, Soil Moisture, Lux, Reservoir status)
+  - Real-time time-series curves (micro-climate & root-zone dual views)
+  - Live pathology dossier stream
+  - Instant telemetry injection tool for testing
+  - Served directly from Flask at `http://localhost:5000/dashboard`
+
+## Phase 5: Next Roadmap Priorities
 - [ ] Camera MJPEG stream integration (`GET /api/camera/stream`, `POST /api/camera/capture`)
 - [ ] Irrigation control endpoints (`POST /api/irrigation/manual`, `POST /api/irrigation/emergency_stop` with safety watchdogs)
-
-### Lower Priority
 - [ ] Dossier reports (PDF export via ReportLab, CSV telemetry logs)
 - [ ] Device management inventory page (`/devices`)
-- [ ] UI Settings page (`/settings`)
 
 ---
 
@@ -58,4 +57,4 @@
 **Local Path:** `D:\ml challenge\SYNTERRA`  
 **API Key:** Stored locally in `.env` (gitignored, 57 credits remaining)  
 **API Endpoint:** `https://crop.kindwise.com/api/v1`  
-**Latest Verification:** 2026-11-02 10:41 — All systems GREEN (turnaround 1.53s)  
+**Latest Verification:** 2026-11-02 10:57 — WebSocket & React Dashboard LIVE  
