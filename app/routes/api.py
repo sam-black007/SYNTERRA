@@ -361,9 +361,15 @@ def configure_auto_irrigation():
 @api_bp.route('/camera/stream')
 def camera_stream():
     """Proxy live MJPEG video stream with telemetry HUD overlay."""
+    app = current_app._get_current_object()
+
     def _get_latest_telem():
-        latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
-        return latest.to_dict() if latest else None
+        try:
+            with app.app_context():
+                latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+                return latest.to_dict() if latest else None
+        except Exception:
+            return None
 
     return Response(
         camera_service.mjpeg_generator(_get_latest_telem),
@@ -371,14 +377,26 @@ def camera_stream():
     )
 
 
-@api_bp.route('/camera/capture', methods=['POST'])
+@api_bp.route('/camera/snapshot', methods=['GET'])
+def camera_snapshot():
+    """Return a single live JPEG snapshot frame directly."""
+    latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+    telem = latest.to_dict() if latest else None
+    frame_bytes = camera_service.capture_frame(telem)
+    return Response(frame_bytes, mimetype='image/jpeg')
+
+
+@api_bp.route('/camera/capture', methods=['GET', 'POST'])
 def camera_capture_and_diagnose():
-    """Snap live camera frame and pipe directly into Kindwise AI pathology."""
+    """Snap live camera frame. GET returns JPEG snapshot, POST pipes into Kindwise AI pathology."""
     latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
     telem = latest.to_dict() if latest else None
 
     # Capture frame bytes
     frame_bytes = camera_service.capture_frame(telem)
+
+    if request.method == 'GET':
+        return Response(frame_bytes, mimetype='image/jpeg')
 
     # Execute Kindwise pathology
     client = PlantIdClient()

@@ -81,7 +81,7 @@ Built with React 18, Vite, Tailwind CSS, Recharts, and Flask-SocketIO:
 
 ## Hardware & Telemetry Bridge
 
-### 1. ESP32-S3 Firmware
+### 1. ESP32-S3 Sensor Client Firmware
 Located at `firmware/ESP32_Sensor_Client/ESP32_Sensor_Client.ino`:
 - **DHT11**: Temperature & humidity on GPIO 2
 - **BH1750**: Ambient light (lux) on I2C (SDA GPIO 4, SCL GPIO 5)
@@ -90,7 +90,18 @@ Located at `firmware/ESP32_Sensor_Client/ESP32_Sensor_Client.ino`:
 - Emits structured JSON strings over Serial at 115200 baud every 10 seconds.
 - Built-in `SIMULATION_MODE` toggle for bench testing without attached hardware.
 
-### 2. Serial Bridge
+### 2. ESP32-S3 Camera Server Firmware
+Located at `firmware/ESP32_S3_Camera_Server/ESP32_S3_Camera_Server.ino` & `camera_pins.h`:
+- **Supported Hardware**: Freenove ESP32-S3 WROOM CAM, Seeed Xiao ESP32S3 Sense, ESP32-S3-EYE, and AI-Thinker OV2640/OV3660/OV5640.
+- **Endpoints**:
+  - `http://<ESP32_IP>/stream` &mdash; High-performance MJPEG live stream.
+  - `http://<ESP32_IP>/capture` &mdash; High-resolution JPEG snapshot for Kindwise AI disease detection.
+- **Arduino IDE Settings**:
+  - Board: *ESP32S3 Dev Module*
+  - PSRAM: *OPI PSRAM* (or *QSPI PSRAM* for Xiao Sense) &mdash; **MUST BE ENABLED!**
+  - Partition Scheme: *Huge APP (3MB No OTA)*
+
+### 3. Serial Bridge
 Run the Python serial bridge to forward ESP32 USB telemetry directly into the Flask API:
 ```powershell
 # Auto-detects connected ESP32 COM port and forwards telemetry

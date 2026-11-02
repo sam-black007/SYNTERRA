@@ -24,6 +24,11 @@
   - DHT11 (GPIO2), BH1750 (GPIO4/5), FC-28 Soil (GPIO1/40), Float switch (GPIO41)
   - 115200 baud JSON serial emission every 10s
   - Built-in `SIMULATION_MODE` toggle
+- [x] ESP32-S3 Optical Pathology Camera Server Firmware (`firmware/ESP32_S3_Camera_Server/ESP32_S3_Camera_Server.ino` & `camera_pins.h`):
+  - High-performance MJPEG live video streaming (`/stream`)
+  - Still JPEG capture (`/capture`) for Kindwise AI disease detection
+  - Supports Freenove ESP32-S3 CAM, Xiao ESP32S3 Sense, ESP32-S3-EYE, and AI-Thinker
+  - PSRAM XGA (1024x768) and SVGA (800x600) frame buffer allocation
 - [x] USB Serial Bridge Script (`scripts/serial_bridge.py`) with `--mock` simulation mode
 
 ## Phase 3: Real-Time Web Platform & Ag-Tech Command Console (Completed & Verified)
@@ -52,6 +57,6 @@
 
 **Repo:** https://github.com/sam-black007/SYNTERRA  
 **Local Path:** `D:\ml challenge\SYNTERRA`  
-**API Key:** Stored locally in `.env` (gitignored, 56 credits remaining)  
+**API Key:** Stored locally in `.env` (gitignored, 53 credits remaining)  
 **API Endpoint:** `https://crop.kindwise.com/api/v1`  
-**Latest Verification:** 2026-11-02 11:12 — All Systems Green (PDF Dossiers + Docker + Web Console)  
+**Latest Verification:** 2026-11-02 11:26 — All Systems Green (ESP32-S3 Camera Server + Fast MJPEG Stream + PDF Dossiers + React Console)  
