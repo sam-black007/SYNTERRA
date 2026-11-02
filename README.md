@@ -131,8 +131,54 @@ To replicate this exact setup, source the following standard, low-cost component
 
 ## 🔌 Hardware Setup & Pinout Guide
 
+### 2D Circuit Wiring Schematic & Top-Down Architecture
+
 <p align="center">
-  <img src="docs/images/esp32_hardware_setup.jpg" alt="SYNTERRA ESP32 Hardware Node" width="520px" style="border-radius: 12px; box-shadow: 0 6px 25px rgba(0,0,0,0.5);" />
+  <img src="docs/images/hardware_schematic_2d.png" alt="SYNTERRA 2D Hardware Circuit Wiring Schematic" width="100%" style="border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.6);" />
+</p>
+
+```mermaid
+graph LR
+    subgraph Sensors ["Peripheral Sensor Breakouts"]
+        BH["BH1750 Lux Sensor<br/>(GY-30 I2C 0x23)"]
+        SOIL["FC-28 Soil Moisture<br/>(LM393 Comparator)"]
+        DHT["DHT11 Sensor<br/>(Air Temp & Humidity)"]
+        RELAY["5V Relay Module<br/>(Submersible Drip Pump)"]
+    end
+
+    subgraph ESP32 ["ESP32 NodeMCU Dev Module (30-Pin USB-C)"]
+        P_5V["VIN (5V Rail)"]
+        P_3V["3V3 (3.3V Rail)"]
+        P_GND["GND (System Common)"]
+        GPIO_21["D21 (I2C SDA)"]
+        GPIO_22["D22 (I2C SCL)"]
+        GPIO_34["D34 (ADC1_CH6)"]
+        GPIO_32["D32 (Bidirectional GPIO)"]
+        GPIO_27["D27 (Relay Control Output)"]
+    end
+
+    BH -- "SDA (Blue Wire)" --> GPIO_21
+    BH -- "SCL (Yellow Wire)" --> GPIO_22
+    BH -- "VCC (Red Wire)" --> P_5V
+    BH -- "GND (Black Wire)" --> P_GND
+
+    SOIL -- "A0 (Green Wire)" --> GPIO_34
+    SOIL -- "VCC (Orange Wire)" --> P_3V
+    SOIL -- "GND (Black Wire)" --> P_GND
+
+    DHT -- "DATA (Cyan Wire)" --> GPIO_32
+    DHT -- "VCC (Orange Wire)" --> P_3V
+    DHT -- "GND (Black Wire)" --> P_GND
+
+    RELAY -- "IN (Purple Wire)" --> GPIO_27
+    RELAY -- "VCC (Red Wire)" --> P_5V
+    RELAY -- "GND (Black Wire)" --> P_GND
+```
+
+### Physical Breadboard & Wiring Arrangement
+
+<p align="center">
+  <img src="docs/images/esp32_hardware_setup.jpg" alt="SYNTERRA Physical Hardware Arrangement" width="520px" style="border-radius: 12px; box-shadow: 0 6px 25px rgba(0,0,0,0.5);" />
 </p>
 
 ### Exact Pin Connection Table
@@ -599,6 +645,8 @@ SYNTERRA/
 │       ├── dashboard_full_overview.png # Comprehensive full-page overview console
 │       ├── pathology_studio_live.png   # Dual-Engine AI Pathology Studio preview
 │       ├── irrigation_watchdog_live.png# Autonomous Irrigation Watchdog preview
+│       ├── hardware_schematic_2d.png   # 2D circuit wiring schematic graphic
+│       ├── hardware_schematic_2d.svg   # Scalable vector graphics schematic source
 │       └── esp32_hardware_setup.jpg    # Physical ESP32 board arrangement photo
 ├── firmware/
 │   └── Sensor_Hardware_Diagnostic/
