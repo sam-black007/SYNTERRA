@@ -933,38 +933,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Botanical Species Intelligence Selector Bar */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-[#0e1828] to-[#0a1220] border border-emerald-950/80 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="text-2xl p-2.5 rounded-xl bg-emerald-950/50 border border-emerald-800/40 flex items-center justify-center shrink-0">
-                  {activeCrop?.icon || '🍅'}
-                </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Botanical Target Profile</span>
-                    <span className="text-xs font-bold text-white">{activeCrop?.name || 'Cherry / Beefsteak Tomato'}</span>
-                    <span className="text-xs text-slate-500 italic hidden sm:inline">({activeCrop?.scientific_name || 'Solanum lycopersicum'})</span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-0.5">{activeCrop?.notes || 'High light demand; requires balanced calcium to avoid blossom end rot.'}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0">
-                <span className="text-xs font-semibold text-slate-400">Species Preset:</span>
-                <select
-                  value={activeCrop?.key || 'tomato'}
-                  onChange={(e) => handleSelectCrop(e.target.value)}
-                  className="bg-slate-950 border border-slate-700 hover:border-emerald-500 text-slate-100 text-xs font-bold rounded-xl px-3 py-2 outline-none transition cursor-pointer"
-                >
-                  {cropProfiles.map((c) => (
-                    <option key={c.key} value={c.key}>
-                      {c.icon} {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
             {/* Authoritative GBIF Biodiversity Taxonomy Strip */}
             {gbifTaxonomy && gbifTaxonomy.success && (
               <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 text-xs flex flex-wrap items-center justify-between gap-3 shadow-inner">
