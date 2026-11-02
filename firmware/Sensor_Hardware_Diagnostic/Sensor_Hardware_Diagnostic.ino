@@ -1,26 +1,32 @@
 /*
  * ==============================================================================
- * SYNTERRA — Sensor Hardware Live Bench Test & Diagnostics
+ * SYNTERRA — Sensor Hardware Live Diagnostics & Bench Test
  * ==============================================================================
  *
- * Use this sketch to instantly verify your physical sensor hardware before
- * full deployment in the greenhouse.
+ * Board: ESP32 Dev Module (standard ESP32-WROOM-32) or ESP32-S3
  *
- * Supported Sensors:
- *   1. DHT11 / DHT22 (Temperature & Relative Humidity)
- *   2. BH1750 Digital Light Sensor (I2C Lux)
- *   3. FC-28 / Capacitive Soil Moisture Sensor (Analog ADC)
- *   4. Water Level Float Switch (Digital Pullup)
- *   5. Relay Module (Irrigation Solenoid / Pump Test)
- *
- * Board Selection (Uncomment your board below):
- *   #define BOARD_ESP32_S3          // For ESP32-S3 (DevKit / N16R8)
- *   #define BOARD_STANDARD_ESP32   // For standard ESP32-WROOM-32 / DevKit v1
+ * Required Arduino Libraries (Install via Arduino Library Manager):
+ *   1. "DHT sensor library" by Adafruit
+ *   2. "BH1750" by Christopher Laws
+ *   3. "Adafruit Unified Sensor" by Adafruit
  * ==============================================================================
  */
 
+#include <Arduino.h>
+#include <Wire.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <DHT.h>
+#include <BH1750.h>
+
+// Brownout register header (optional for ESP32)
+#if __has_include("soc/soc.h") && __has_include("soc/rtc_cntl_reg.h")
+  #include "soc/soc.h"
+  #include "soc/rtc_cntl_reg.h"
+#endif
+
 // ==============================================================================
-// Automatic Pin Detection (ESP32 Dev Module vs ESP32-S3)
+// Automatic Pin Detection ("ESP32 Dev Module" vs "ESP32-S3")
 // ==============================================================================
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
   // ESP32-S3 Pin Mapping
@@ -50,7 +56,7 @@ const int CALIB_AIR_DRY   = 3400;
 const int CALIB_WATER_WET = 1300;
 
 // ==============================================================================
-// WiFi Configuration (Optional - for sending to SYNTERRA dashboard)
+// WiFi Configuration (Connects to your laptop hotspot "jj")
 // ==============================================================================
 const char* ssid = "jj";                                // Windows Mobile Hotspot
 const char* password = "123456789";                     // Hotspot Password
@@ -117,13 +123,16 @@ void sendToSynterra(float temp, float hum, float lux, float soil_pct, int raw_ad
 }
 
 void setup() {
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // Disable brownout reset
+#if defined(WRITE_PERI_REG) && defined(RTC_CNTL_BROWN_OUT_REG)
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // Disable brownout reset if supported
+#endif
+
   Serial.begin(115200);
   delay(1500);
 
   Serial.println();
   Serial.println(F("=========================================================="));
-  Serial.println(F("SYNTERRA — Sensor Hardware Live Diagnostics & Bench Test"));
+  Serial.printf("SYNTERRA — Sensor Hardware Live Diagnostics (%s)\n", BOARD_NAME);
   Serial.println(F("=========================================================="));
 
   // 1. Configure Pins

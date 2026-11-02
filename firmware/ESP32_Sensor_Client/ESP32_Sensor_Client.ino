@@ -25,14 +25,18 @@
  * ==============================================================================
  */
 
+#include <Arduino.h>
 #include <Wire.h>
 #include <DHT.h>
 #include <BH1750.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include "soc/soc.h"
-#include "soc/rtc_cntl_reg.h"
+
+#if __has_include("soc/soc.h") && __has_include("soc/rtc_cntl_reg.h")
+  #include "soc/soc.h"
+  #include "soc/rtc_cntl_reg.h"
+#endif
 
 // ==============================================================================
 // Configuration & Flags
@@ -129,7 +133,9 @@ float sim_lux = 450.0;
 // Setup
 // ==============================================================================
 void setup() {
+#if defined(WRITE_PERI_REG) && defined(RTC_CNTL_BROWN_OUT_REG)
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // Disable brownout resets
+#endif
   Serial.begin(SERIAL_BAUD_RATE);
   delay(1500); // Allow USB CDC connection to stabilize
 
