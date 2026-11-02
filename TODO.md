@@ -53,10 +53,24 @@
 - [x] Double-clickable Windows launcher (`start.bat`)
 - [x] PowerShell launcher (`start.ps1`)
 
+## Phase 5: Macroclimate Agro-Meteorology & Predictive Pathogen Advisory (Completed & Verified)
+- [x] Hyper-Local 5-Day Predictive Weather Engine (`app/services/weather_service.py`):
+  - Zero-credit live atmospheric telemetry via Open-Meteo API
+  - Auto-geolocation coordinates with automatic IP fallback
+  - WMO weather condition code decoding (temperatures, precipitation probability, humidity, UV index, wind speed)
+  - Agronomic Disease Risk Index (predictive fungal & blight spore incubation calculation)
+  - Predictive Irrigation Modulation Advisories (rain-adjusted water recommendations)
+- [x] REST API Weather Endpoints (`/api/weather/forecast`, `/api/weather/refresh`)
+- [x] React Agro-Meteorological 5-Day Forecast Card in Telemetry Dashboard:
+  - 5 interactive daily cards (High/Low temp, Rain %, Humidity, Spore Risk Pill)
+  - Actionable Agro-Weather Advisory & automated irrigation override warnings
+  - Instant location detection and live refresh button
+- [x] Integrated PDF Dossier 5-Day Weather Table & Advisory Report (`app/services/pdf_generator.py`)
+
 ---
 
 **Repo:** https://github.com/sam-black007/SYNTERRA  
 **Local Path:** `D:\ml challenge\SYNTERRA`  
 **API Key:** Stored locally in `.env` (gitignored, 53 credits remaining)  
 **API Endpoint:** `https://crop.kindwise.com/api/v1`  
-**Latest Verification:** 2026-11-02 11:26 — All Systems Green (ESP32-S3 Camera Server + Fast MJPEG Stream + PDF Dossiers + React Console)  
+**Latest Verification:** 2026-11-02 13:04 — All Systems Green (5-Day Predictive Weather + PDF Dossiers + Live React Console + ESP32-S3 Firmware)  

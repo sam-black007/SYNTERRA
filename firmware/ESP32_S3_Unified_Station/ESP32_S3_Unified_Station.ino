@@ -50,9 +50,9 @@
 // ==============================================================================
 // 1. Select Camera Hardware Model
 // ==============================================================================
-#define CAMERA_MODEL_FREENOVE_ESP32S3_CAM    // Default: Freenove ESP32-S3 WROOM CAM
+//#define CAMERA_MODEL_FREENOVE_ESP32S3_CAM    // Default: Freenove ESP32-S3 WROOM CAM
 //#define CAMERA_MODEL_XIAO_ESP32S3_SENSE      // Seeed Studio XIAO ESP32S3 Sense
-//#define CAMERA_MODEL_ESP32S3_EYE             // Espressif ESP32-S3-EYE
+#define CAMERA_MODEL_ESP32S3_EYE             // Espressif ESP32-S3-EYE
 //#define CAMERA_MODEL_AI_THINKER              // Classic ESP32-CAM (WROVER)
 
 #include "camera_pins.h"

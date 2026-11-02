@@ -8,6 +8,7 @@ from app.models.sensor import SensorReading
 from app.services.plantid_client import PlantIdClient
 from app.services.irrigation_controller import irrigation_manager
 from app.services.camera_service import camera_service
+from app.services.weather_service import weather_service
 
 api_bp = Blueprint('api', __name__)
 
@@ -559,4 +560,24 @@ def system_network():
         'active_camera_url': camera_service.target_cam_url,
         'active_camera_online': camera_service.check_hardware_online()
     }), 200
+
+
+# ============================================================================
+# 5-Day Agro-Meteorology & Weather Forecasting
+# ============================================================================
+
+@api_bp.route('/weather/forecast', methods=['GET'])
+def get_weather_forecast():
+    """Retrieve 5-day predictive agro-meteorological weather forecast and risk advisory."""
+    force = request.args.get('refresh', '').lower() in ['1', 'true', 'yes']
+    forecast_data = weather_service.fetch_5day_forecast(force_refresh=force)
+    return jsonify(forecast_data), 200
+
+
+@api_bp.route('/weather/refresh', methods=['POST'])
+def refresh_weather_forecast():
+    """Force an immediate refresh of the 5-day weather forecast."""
+    forecast_data = weather_service.fetch_5day_forecast(force_refresh=True)
+    return jsonify(forecast_data), 200
+
 

@@ -27,7 +27,12 @@ import {
   Zap,
   Gauge,
   Wifi,
-  Search
+  Search,
+  CloudRain,
+  CloudSun,
+  CloudLightning,
+  MapPin,
+  Wind
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -93,6 +98,8 @@ export default function App() {
   const [customCamUrl, setCustomCamUrl] = useState('');
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [discoveryMsg, setDiscoveryMsg] = useState('');
+  const [weatherData, setWeatherData] = useState(null);
+  const [isRefreshingWeather, setIsRefreshingWeather] = useState(false);
   const fileInputRef = useRef(null);
 
   // Initialize Socket.io and data polling
@@ -237,6 +244,13 @@ export default function App() {
           if (cam) setCameraStatus(cam);
         })
         .catch(() => {});
+
+      fetch('/api/weather/forecast')
+        .then((r) => r.json())
+        .then((w) => {
+          if (w.success) setWeatherData(w);
+        })
+        .catch(() => {});
     } catch (err) {
       console.warn('Initial data load warning:', err);
     }
@@ -333,6 +347,36 @@ export default function App() {
       }
     } catch (err) {
       alert('Failed to configure camera: ' + err.message);
+    }
+  };
+
+  // Weather Forecast Handler
+  const handleRefreshWeather = async () => {
+    setIsRefreshingWeather(true);
+    try {
+      const res = await fetch('/api/weather/refresh', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setWeatherData(data);
+      }
+    } catch (err) {
+      console.error('Weather refresh failed:', err);
+    } finally {
+      setIsRefreshingWeather(false);
+    }
+  };
+
+  const renderWeatherIcon = (cat) => {
+    switch (cat) {
+      case 'rain':
+        return <CloudRain className="w-5 h-5 text-cyan-400" />;
+      case 'thunderstorm':
+        return <CloudLightning className="w-5 h-5 text-amber-400 animate-pulse" />;
+      case 'clear':
+        return <Sun className="w-5 h-5 text-amber-400" />;
+      case 'cloudy':
+      default:
+        return <CloudSun className="w-5 h-5 text-slate-300" />;
     }
   };
 
@@ -700,6 +744,139 @@ export default function App() {
                   {latestTelemetry?.water_reservoir_ok !== false ? 'ARMED' : 'INTERLOCKED'}
                 </span>
               </div>
+            </div>
+
+            {/* 5-Day Macroclimate & Agro-Meteorology Predictive Trend */}
+            <div className="bg-[#0d1422] border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-teal-950/50 text-teal-400 border border-teal-800/40">
+                    <CloudSun className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-white text-sm">5-Day Macroclimate & Pathogen Incubation Forecast</h3>
+                      {weatherData?.location && (
+                        <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium">
+                          <MapPin className="w-3 h-3 text-emerald-400" />
+                          <span>{weatherData.location.city}, {weatherData.location.region} ({weatherData.location.country})</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">Predictive atmospheric forecast for disease spore prevention & automated irrigation scheduling.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {weatherData?.overall_risk && (
+                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border uppercase tracking-wider flex items-center gap-1.5 ${
+                      weatherData.overall_risk === 'HIGH'
+                        ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                        : weatherData.overall_risk === 'MODERATE'
+                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full ${
+                        weatherData.overall_risk === 'HIGH' ? 'bg-rose-500 animate-ping' : weatherData.overall_risk === 'MODERATE' ? 'bg-amber-400' : 'bg-emerald-400'
+                      }`} />
+                      <span>{weatherData.overall_risk} Pathogen Risk</span>
+                    </span>
+                  )}
+                  <button
+                    onClick={handleRefreshWeather}
+                    disabled={isRefreshingWeather}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition border border-slate-700 disabled:opacity-50"
+                    title="Refresh 5-Day Forecast"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingWeather ? 'animate-spin text-teal-400' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* 5-Day Forecast Grid */}
+              {weatherData?.forecast ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                  {weatherData.forecast.map((day, idx) => (
+                    <div
+                      key={day.date}
+                      className={`p-3 rounded-xl border flex flex-col justify-between transition hover:border-slate-700 ${
+                        idx === 0 ? 'bg-slate-900/90 border-slate-700/80 shadow-md ring-1 ring-emerald-500/20' : 'bg-slate-900/40 border-slate-800/80'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs text-white">
+                            {idx === 0 ? 'Today' : day.day_name}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-500">{day.date_display}</span>
+                        </div>
+
+                        <div className="my-2.5 flex items-center gap-2">
+                          {renderWeatherIcon(day.category)}
+                          <div className="truncate">
+                            <p className="text-xs font-semibold text-slate-200 truncate">{day.condition}</p>
+                            <p className="text-[10px] text-slate-400">{day.temp_min}°C – {day.temp_max}°C</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5 pt-2 border-t border-slate-800/80 text-[10px]">
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span className="flex items-center gap-1">
+                            <Droplets className="w-3 h-3 text-cyan-400" />
+                            <span>Rain:</span>
+                          </span>
+                          <span className="font-mono font-bold text-slate-200">{day.precip_prob}%</span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span>Humidity:</span>
+                          <span className="font-mono text-slate-300">{day.humidity_pct}%</span>
+                        </div>
+
+                        <div className={`mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded text-center border ${
+                          day.risk_level === 'HIGH'
+                            ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                            : day.risk_level === 'MODERATE'
+                            ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                            : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                        }`}>
+                          {day.risk_level} RISK
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-6 flex items-center justify-center text-xs text-slate-500">
+                  <RefreshCw className="w-4 h-4 animate-spin mr-2 text-teal-400" />
+                  <span>Loading local 5-day weather & disease risk model...</span>
+                </div>
+              )}
+
+              {/* Agronomic Advisory Callout */}
+              {weatherData && (
+                <div className={`p-3.5 rounded-xl border text-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-3 ${
+                  weatherData.overall_risk === 'HIGH'
+                    ? 'bg-rose-950/20 border-rose-500/30 text-rose-200'
+                    : weatherData.overall_risk === 'MODERATE'
+                    ? 'bg-amber-950/20 border-amber-500/30 text-amber-200'
+                    : 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+                }`}>
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${
+                      weatherData.overall_risk === 'HIGH' ? 'text-rose-400' : weatherData.overall_risk === 'MODERATE' ? 'text-amber-400' : 'text-emerald-400'
+                    }`} />
+                    <p className="leading-relaxed">
+                      <span className="font-bold">Agro-Weather Advisory: </span>
+                      {weatherData.overall_advisory}
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-black/40 border border-slate-700 text-teal-300 shrink-0 font-mono">
+                    {weatherData.irrigation_recommendation}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Time Series Charts */}
