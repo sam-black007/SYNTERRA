@@ -331,6 +331,7 @@ void setup() {
   if (!SENSOR_SIMULATION_MODE) {
     dht.begin();
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+    Wire.setTimeOut(30);
     if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
       bh1750_available = true;
       Serial.println(F("[SENSORS] BH1750 Light Meter online!"));

@@ -31,6 +31,8 @@
 #include <ArduinoJson.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
 
 // ==============================================================================
 // Configuration & Flags
@@ -118,6 +120,7 @@ float sim_lux = 450.0;
 // Setup
 // ==============================================================================
 void setup() {
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // Disable brownout resets
   Serial.begin(SERIAL_BAUD_RATE);
   delay(1500); // Allow USB CDC connection to stabilize
 
@@ -128,8 +131,9 @@ void setup() {
     // 1. Initialize DHT11
     dht.begin();
 
-    // 2. Initialize I2C for BH1750
+    // 2. Initialize I2C for BH1750 (with 30ms bus timeout)
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+    Wire.setTimeOut(30);
     if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
       bh1750_available = true;
       Serial.println(F("{\"sensor\": \"BH1750\", \"status\": \"online\"}"));
