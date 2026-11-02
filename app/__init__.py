@@ -32,6 +32,7 @@ def create_app():
 
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
+    csrf.exempt(api_bp)  # API endpoints are used by ESP32, curl, mobile apps — no CSRF needed
 
     # Create tables
     with app.app_context():

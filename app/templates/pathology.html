@@ -6,6 +6,7 @@
     <p class="muted">Upload a leaf image for real-time disease identification powered by Plant.id.</p>
 
     <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
             <label>Plant Name (optional)</label>
             <input type="text" name="plant_name" placeholder="e.g. Tomato, Pepper, Potato">
