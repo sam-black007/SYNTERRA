@@ -184,7 +184,19 @@ void loop() {
       Serial.println(F("  ⚡ [RELAY TEST] Relay click complete (OFF)."));
     }
 
-    // Post to SYNTERRA dashboard
+    // Direct USB Serial JSON Output (Read by scripts/serial_bridge.py for Option 1 Cable Mode)
+    String jsonString = "{";
+    jsonString += "\"device_id\":\"esp32-soil-dht\",";
+    jsonString += "\"plant_id\":\"test-specimen-1\",";
+    jsonString += "\"temperature_c\":" + String(dht_ok ? temp : 24.0, 1) + ",";
+    jsonString += "\"humidity_pct\":" + String(dht_ok ? hum : 60.0, 1) + ",";
+    jsonString += "\"soil_moisture_pct\":" + String(soil_pct, 1) + ",";
+    jsonString += "\"soil_raw_adc\":" + String(raw_adc) + ",";
+    jsonString += "\"water_reservoir_ok\":true";
+    jsonString += "}";
+    Serial.println(jsonString);
+
+    // Optional Wi-Fi Post (if Wi-Fi is active)
     sendToSynterra(dht_ok ? temp : 24.0, dht_ok ? hum : 60.0, soil_pct, raw_adc);
 
     Serial.println();
