@@ -5,40 +5,48 @@
 
 SYNTERRA is an enterprise-grade IoT and AI-driven precision agriculture platform. It bridges edge microcontroller sensing, closed-loop irrigation actuation, real-time agronomic telemetry fusion, and computer vision leaf pathology into an integrated laboratory console.
 
+<p align="center">
+  <img src="docs/images/dashboard_live.png" alt="SYNTERRA Real-Time Laboratory Console" width="95%" style="border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.6);" />
+</p>
+
 ---
 
 ## 🏛️ System Architecture
 
+SYNTERRA orchestrates four decoupled tiers: Edge Sensing & Actuation, Dual-Link Telemetry Ingestion, Ingestion & Multi-Board Telemetry Fusion, and the Real-Time React Operations Console.
+
 ```mermaid
 flowchart TD
-    subgraph Edge ["Hardware Edge Node (ESP32 USB-C)"]
-        DHT["DHT11 (D32)<br/>Temp & Humidity"]
-        SOIL["FC-28 (D34/D35)<br/>Soil Moisture"]
-        BH["BH1750 (D21/D22)<br/>Ambient Light Lux"]
-        RELAY["Relay Solenoid (D27)<br/>Irrigation Pump"]
-        MGR["SensorManager Firmware<br/>6-Second Cadence"]
+    subgraph Edge ["1. Hardware Edge Node (ESP32 USB-C)"]
+        DHT["DHT11 (D32)<br/>Canopy Temp & Humidity"]
+        SOIL["FC-28 (D34/D35)<br/>Substrate Moisture ADC"]
+        BH["BH1750 (D21/D22)<br/>Ambient Photometric Lux"]
+        RELAY["Relay Solenoid (D27)<br/>Irrigation Pump Control"]
+        MGR["SensorManager Firmware<br/>6-Second Cadence Engine"]
+        
         DHT --> MGR
         SOIL --> MGR
         BH --> MGR
-        MGR -.->|Actuate| RELAY
+        MGR -.->|Actuate 5V/12V Pump| RELAY
     end
 
-    subgraph DualLink ["Dual-Link Telemetry Pipeline"]
+    subgraph DualLink ["2. Dual-Link Telemetry Pipeline"]
         direction TB
         USB["Link A: USB Serial<br/>JSON at 115200 Baud"]
-        WIFI["Link B: Wi-Fi REST<br/>HTTP POST /telemetry"]
+        WIFI["Link B: Wi-Fi REST<br/>Direct HTTP POST"]
         BRIDGE["Python Serial Bridge<br/>(serial_bridge.py)"]
-        MGR -->|Cable| USB --> BRIDGE
-        MGR -->|Wireless| WIFI
+        
+        MGR -->|Cable Mode| USB --> BRIDGE
+        MGR -->|Wireless Mode| WIFI
     end
 
-    subgraph Backend ["SYNTERRA Server (Flask + SQLAlchemy)"]
+    subgraph Backend ["3. Enterprise Server (Flask + SQLAlchemy)"]
         API["Telemetry Ingestion & Auth<br/>(X-Device-Token)"]
-        FUSION["Multi-Board Telemetry Fusion"]
-        VPD_ENG["VPD Psychrometric Engine"]
-        CLIMATE_ENG["Climate Inference Engine"]
-        IRRIG_MGR["Autonomous Irrigation Watchdog"]
-        DIAG_SVC["Kindwise Crop.Health / Gemini AI"]
+        FUSION["Multi-Board Telemetry Fusion Engine"]
+        VPD_ENG["Agronomic VPD Psychrometric Engine"]
+        CLIMATE_ENG["Microclimate Classification Engine"]
+        IRRIG_MGR["Closed-Loop Irrigation Watchdog"]
+        DIAG_SVC["Kindwise Crop.Health / Gemini Vision AI"]
         DB[(SQLite / plant_doctor.db)]
         
         BRIDGE --> API
@@ -49,15 +57,15 @@ flowchart TD
         FUSION --> IRRIG_MGR
     end
 
-    subgraph UI ["Real-Time Operations Console (React 18 + Vite)"]
-        WS["Socket.IO WebSockets"]
-        BANNER["Microclimate Intelligence Banner"]
-        METRICS["Core Sensor Gauges & Dynamic Badges"]
+    subgraph UI ["4. Real-Time Operations Console (React 18 + Vite)"]
+        WS["Socket.IO WebSocket Bus"]
+        BANNER["Canopy Microclimate Intelligence Banner"]
+        METRICS["Core Metric Gauges & Live Condition Badges"]
         CHARTS["Recharts Dual Time-Series Analytics"]
-        STUDIO["Optical Diagnostic Studio"]
-        PDF["PDF Pathology Dossier Generator"]
+        STUDIO["Optical Pathology Studio"]
+        PDF["PDF Clinical Dossier Generator"]
 
-        Backend -->|Socket.IO| WS
+        Backend -->|Socket.IO Events| WS
         WS --> BANNER
         WS --> METRICS
         WS --> CHARTS
@@ -68,33 +76,124 @@ flowchart TD
 
 ---
 
-## 🔌 Hardware Pinout & Wiring (USB-C ESP32 Dev Module)
+## ⚡ Edge Microcontroller Signal & Firmware Flow
 
-The system runs on a **Single-Board USB-C ESP32 Dev Module (Standard 30/38-Pin DevKit)** with zero pin collisions:
+The firmware on the USB-C ESP32 Dev Module is architected as an object-oriented `SensorManager` that handles non-blocking multi-sensor sampling, brownout rejection, 5-sample analog noise filtering, dynamic climate classification, and dual dispatch:
 
-| Sensor / Module | Sensor Pin | ESP32 Pin on Board | Bus / Logic Type | Hardware Function & Safety Rules |
+```mermaid
+flowchart LR
+    subgraph SensoryInputs ["Sensory Input Bus"]
+        D32["D32: DHT11<br/>18ms Bidirectional Pulse"]
+        D34["D34: FC-28<br/>5-Sample 12-bit ADC1"]
+        D21_22["D21/D22: BH1750<br/>Hardware I2C (Wire)"]
+    end
+
+    subgraph MCU ["ESP32 Node (SensorManager)"]
+        ACQ["Synchronous Acquisition (readAll)"]
+        CALIB["Calibration & Noise Filtering"]
+        INFER["Climate & Weather Inference Engine"]
+        FMT["JSON Serialization (toJSON)"]
+        
+        SensoryInputs --> ACQ --> CALIB --> INFER --> FMT
+    end
+
+    subgraph Dispatch ["Dual-Link Output (Every 6 Seconds)"]
+        LINK_A["Link A: USB Serial CDC<br/>115200 Baud JSON String"]
+        LINK_B["Link B: Direct Wi-Fi REST<br/>HTTP POST /api/sensors/telemetry"]
+        
+        FMT --> LINK_A
+        FMT --> LINK_B
+    end
+```
+
+---
+
+## 💧 Closed-Loop Autonomous Irrigation Flowchart
+
+SYNTERRA implements an automated closed-loop irrigation policy with safety watchdogs, dry-run reservoir interlocks, and emergency cutoff mechanisms:
+
+```mermaid
+flowchart TD
+    START(["Telemetry Ingestion Cycle"]) --> READ["Evaluate Substrate Moisture & Reservoir Status"]
+    READ --> EVAL{"Autonomous Mode Enabled?"}
+    EVAL -- No / Manual --> IDLE["System in Standby (Awaiting Manual Trigger)"]
+    EVAL -- Yes --> CHECK_SOIL{"Soil Moisture < Threshold %?"}
+    CHECK_SOIL -- No --> HEALTHY["Substrate Moisture Nominal (Pump OFF)"]
+    CHECK_SOIL -- Yes --> CHECK_RES{"Water Reservoir Interlock OK?"}
+    CHECK_RES -- No --> LOCKOUT["Safety Interlock Tripped<br/>Inhibit Pump & Alert Operator"]
+    CHECK_RES -- Yes --> PUMP_ON["Energize Relay IN (D27)<br/>Engage 12-Second Irrigation Pulse"]
+    PUMP_ON --> WATCHDOG{"Runtime > Max Timeout?"}
+    WATCHDOG -- Timeout Reached --> PUMP_OFF["De-energize Relay (Safe State OFF)<br/>Log Event to Historical Database"]
+    WATCHDOG -- Operator Cutoff --> ESTOP["Instant Cutoff via /emergency_stop"]
+    ESTOP --> PUMP_OFF
+```
+
+---
+
+## 🔬 AI Computer Vision Leaf Pathology Pipeline
+
+When a leaf frame is acquired from the optical studio or live camera stream, SYNTERRA runs multi-stage clinical diagnostic analysis:
+
+```mermaid
+flowchart TD
+    IMG_IN(["Optical Frame Acquisition<br/>(ESP32-CAM Stream / File Upload)"]) --> PREPROC["Image Normalization & Validation"]
+    PREPROC --> API_DISPATCH["Kindwise Crop.Health / Gemini Vision Engine"]
+    
+    subgraph Inference ["AI Clinical Pathology Inference"]
+        SPECIES["Taxonomic Crop Species Identification"]
+        PATHOLOGY["Pathology Detection & Confidence Scoring"]
+        SEVERITY["Agronomic Severity Assessment"]
+        
+        API_DISPATCH --> SPECIES
+        API_DISPATCH --> PATHOLOGY
+        API_DISPATCH --> SEVERITY
+    end
+    
+    SPECIES --> AGG["Formulate Clinical Dossier"]
+    PATHOLOGY --> AGG
+    SEVERITY --> AGG
+    
+    AGG --> STORE[(Persist in SQLite Database)]
+    AGG --> EMIT["Emit Socket.IO Event (diagnosis_update)"]
+    AGG --> PDF_GEN["Compile Official PDF Clinical Dossier<br/>(Active Ingredients & Treatment Advisory)"]
+    
+    EMIT --> UI_CONSOLE["Live React Diagnostic Console"]
+    PDF_GEN --> PDF_OUT["Downloadable Dossier Document"]
+```
+
+---
+
+## 🔌 Hardware Setup & Pin Mapping
+
+<p align="center">
+  <img src="docs/images/esp32_hardware_setup.jpg" alt="SYNTERRA ESP32 Hardware Node" width="380px" style="border-radius: 12px; box-shadow: 0 6px 25px rgba(0,0,0,0.5);" />
+</p>
+
+The system operates on a single **USB-C ESP32 Dev Module (Standard 30/38-Pin DevKit)** with zero pin collisions:
+
+| Sensor / Actuator | Module Pin | ESP32 Pin on Board | Bus / Logic Type | Hardware Function & Safety Rules |
 | :--- | :--- | :--- | :--- | :--- |
-| **DHT11** (Canopy Climate) | `DATA / OUT` | **`D32`** | Bidirectional GPIO | Pulls line LOW for 18ms; requires bidirectional drive (cannot use GPI pins like D34/D35). |
-| | `VCC` | **`3V3`** | 3.3V Power Bus | Dedicated 3.3V supply rail. |
-| | `GND` | **`GND`** | Ground Bus | Common ground reference. |
+| **DHT11** (Canopy Climate) | `DATA / OUT` | **`D32`** | Bidirectional GPIO | Pulls line LOW for 18ms; requires bidirectional drive (cannot use input-only GPI pins like D34/D35). |
+| | `VCC` | **`3V3`** | 3.3V Power Bus | Dedicated 3.3V low-noise rail. |
+| | `GND` | **`GND`** | Ground Bus | Common system ground. |
 | **FC-28** (Soil Moisture) | `A0` (Analog) | **`D34`** | `ADC1_CH6` | Dedicated ADC1 channel; operational simultaneously with active Wi-Fi radio. |
 | | `D0` (Digital) | **`D35`** | Digital Input | Optional onboard comparator threshold alert. |
 | | `VCC` | **`3V3`** | 3.3V Power Bus | Low noise sensor power rail. |
-| | `GND` | **`GND`** | Ground Bus | Common ground reference. |
+| | `GND` | **`GND`** | Ground Bus | Common system ground. |
 | **BH1750** (Canopy Lux) | `SDA` | **`D21`** | Hardware I2C SDA | Default ESP32 hardware I2C data line. |
 | | `SCL` | **`D22`** | Hardware I2C SCL | Default ESP32 hardware I2C clock line. |
 | | `VCC` | **`VIN` (5V)** | 5V Power Rail | Feeds the sensor's onboard 662K LDO regulator cleanly without voltage sag. |
-| | `GND` | **`GND`** | Ground Bus | Common ground reference. |
-| | `ADDR` | *Unconnected* | I2C Address `0x23` | Internal pull-down sets default address. |
+| | `GND` | **`GND`** | Ground Bus | Common system ground. |
+| | `ADDR` | *Unconnected* | I2C Address `0x23` | Default I2C address. |
 | **Relay Module** (Pump) | `IN / Signal` | **`D27`** | Digital Output | Drives transistor switch for pump coil; normally LOW (safe OFF). |
 | | `VCC` | **`VIN` (5V)** | 5V Power Rail | Dedicated coil power rail. |
-| | `GND` | **`GND`** | Ground Bus | Common ground reference. |
+| | `GND` | **`GND`** | Ground Bus | Common system ground. |
 
 ---
 
 ## 🌤️ Environmental Climate & Condition Classification Engine
 
-The firmware and backend continuously evaluate ambient photometric, thermal, psychrometric, and substrate metrics to classify the macro-atmospheric and microclimate states in real time:
+The firmware and backend continuously evaluate ambient photometric, thermal, psychrometric, and substrate metrics to classify macro-atmospheric and microclimate states in real time:
 
 ### 1. Photometric Flux Classifications (BH1750 Lux)
 * **`< 25 Lux`** &rarr; `🌙 Night / Dark` *(Transpiration paused; dark respiration active)*
