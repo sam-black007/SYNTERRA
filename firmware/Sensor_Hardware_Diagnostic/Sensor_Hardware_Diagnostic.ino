@@ -1,19 +1,3 @@
-/*
- * ==============================================================================
- * SYNTERRA — Sensor Live Diagnostics & Dashboard Telemetry
- * ==============================================================================
- * Clean base using direct Wire.begin() and standard BH1750 library calls.
- *
- * Pinout:
- *   - DHT11 Data:    G32 (Top Row)
- *   - FC-28 Soil A0: G34 (Top Row)
- *   - FC-28 Soil D0: G35 (Top Row)
- *   - BH1750 SDA:    G26 (Top Row) [or G21 default]
- *   - BH1750 SCL:    G25 (Top Row) [or G22 default]
- *   - Relay IN:      G27 (Top Row)
- *   - Power:         3V3 & GND (Top Row) | V5 for Relay
- * ==============================================================================
- */
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -21,198 +5,585 @@
 #include <HTTPClient.h>
 #include <DHT.h>
 #include <BH1750.h>
+#include <math.h>
 
-#if __has_include("soc/soc.h") && __has_include("soc/rtc_cntl_reg.h")
-  #include "soc/soc.h"
-  #include "soc/rtc_cntl_reg.h"
-#endif
+// ============================================================
+// SYNTERRA - AUTONOMOUS SENSOR TELEMETRY
+// ESP32 DEVKIT V1
+// ============================================================
 
-// ==============================================================================
-// Hardware Pins
-// ==============================================================================
-#define PIN_SOIL_ADC     34      // Soil Sensor A0 (Analog 0-100%)
-#define PIN_SOIL_DIG     35      // Soil Sensor D0 (Digital threshold)
-#define PIN_DHT          32      // DHT11 Data Pin
-#define PIN_I2C_SDA      26      // BH1750 SDA (Change to 21 if using bottom row)
-#define PIN_I2C_SCL      25      // BH1750 SCL (Change to 22 if using bottom row)
-#define PIN_RELAY        27      // Pump Relay Control
+// ---------------- CONFIGURATION ----------------
 
-#define DHTTYPE          DHT11
+#define TELEMETRY_INTERVAL_MS 20000UL
 
-// ADC Calibration for Soil Moisture (0 - 4095)
-const int CALIB_AIR_DRY   = 3400; // Sensor in dry air
-const int CALIB_WATER_WET = 1300; // Sensor submerged in water
+#define PIN_SOIL_ADC 34
+#define PIN_SOIL_DIG 35
+#define PIN_DHT 32
 
-// Hotspot Credentials
+#define I2C_SDA 21
+#define I2C_SCL 22
+
+#define DHTTYPE DHT11
+
+#define BH1750_ADDRESS 0x23
+
+// ---------------- SOIL CALIBRATION ----------------
+
+const int CALIB_AIR_DRY = 3400;
+const int CALIB_WATER_WET = 1300;
+
+// ---------------- WIFI CREDENTIALS ----------------
+
 const char* ssid = "jj";
 const char* password = "123456789";
+
 const char* device_token = "plant-lab-auth-token-9981";
+
+const char* device_id = "esp32-sensor-01";
+const char* plant_id = "test-specimen-1";
+
+// ---------------- DASHBOARD ----------------
+
+const char* dashboard_path =
+  "/api/sensors/telemetry";
+
+const int dashboard_port = 5000;
+
+// ---------------- SENSOR OBJECTS ----------------
 
 DHT dht(PIN_DHT, DHTTYPE);
 BH1750 lightMeter;
+
+// ---------------- GLOBAL VARIABLES ----------------
+
 bool bh1750_ready = false;
+
 unsigned long last_read_time = 0;
+
+unsigned long last_wifi_attempt = 0;
+
 int loop_count = 0;
 
-// Post telemetry directly to SYNTERRA dashboard
-void sendToSynterra(float temp, float hum, float lux, float soil_pct, int raw_adc) {
-  if (WiFi.status() != WL_CONNECTED) return;
+// ============================================================
+// INITIALIZE BH1750
+// ============================================================
+
+void initializeBH1750() {
+
+  Serial.println("[INIT] Initializing BH1750...");
+
+  Wire.begin(I2C_SDA, I2C_SCL);
+
+  Wire.setClock(100000);
+
+  delay(50);
+
+  Wire.beginTransmission(BH1750_ADDRESS);
+
+  byte error = Wire.endTransmission();
+
+  if (error == 0) {
+
+    bh1750_ready = lightMeter.begin(
+      BH1750::CONTINUOUS_HIGH_RES_MODE,
+      BH1750_ADDRESS,
+      &Wire
+    );
+
+  } else {
+
+    bh1750_ready = false;
+
+  }
+
+  if (bh1750_ready) {
+
+    Serial.println(
+      "[BH1750] Detected successfully at address 0x23"
+    );
+
+  } else {
+
+    Serial.println(
+      "[BH1750] Initialization failed"
+    );
+
+  }
+}
+
+// ============================================================
+// READ BH1750
+// ============================================================
+
+float readLightSensor() {
+
+  if (!bh1750_ready) {
+    return NAN;
+  }
+
+  float lux = lightMeter.readLightLevel();
+
+  if (!isfinite(lux) || lux < 0.0) {
+    return NAN;
+  }
+
+  return lux;
+}
+
+// ============================================================
+// READ DHT11
+// ============================================================
+
+bool readDHTSensor(float &temperature, float &humidity) {
+
+  temperature = dht.readTemperature();
+
+  humidity = dht.readHumidity();
+
+  if (
+    !isfinite(temperature) ||
+    !isfinite(humidity) ||
+    temperature <= 0.0 ||
+    humidity < 0.0 ||
+    humidity > 100.0
+  ) {
+
+    return false;
+
+  }
+
+  return true;
+}
+
+// ============================================================
+// READ SOIL ANALOG SENSOR
+// ============================================================
+
+int readSoilADC() {
+
+  long total = 0;
+
+  for (int i = 0; i < 5; i++) {
+
+    total += analogRead(PIN_SOIL_ADC);
+
+    delay(5);
+
+  }
+
+  return total / 5;
+}
+
+// ============================================================
+// CALCULATE SOIL MOISTURE
+// ============================================================
+
+float calculateSoilMoisture(int raw_adc) {
+
+  float moisture =
+    ((float)(CALIB_AIR_DRY - raw_adc) /
+    (float)(CALIB_AIR_DRY - CALIB_WATER_WET))
+    * 100.0;
+
+  return constrain(moisture, 0.0, 100.0);
+}
+
+// ============================================================
+// INITIALIZE WIFI
+// ============================================================
+
+void initializeWiFi() {
+
+  Serial.printf(
+    "[WIFI] Connecting to %s",
+    ssid
+  );
+
+  WiFi.mode(WIFI_STA);
+
+  WiFi.begin(ssid, password);
+
+  unsigned long start = millis();
+
+  while (
+    WiFi.status() != WL_CONNECTED &&
+    millis() - start < 10000
+  ) {
+
+    delay(500);
+
+    Serial.print(".");
+
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+
+    Serial.println("\n[WIFI] Connected!");
+
+    Serial.print("[WIFI] ESP32 IP: ");
+
+    Serial.println(WiFi.localIP());
+
+    Serial.print("[WIFI] Gateway: ");
+
+    Serial.println(WiFi.gatewayIP());
+
+  } else {
+
+    Serial.println(
+      "\n[WIFI] Connection failed. Serial mode active."
+    );
+
+  }
+
+}
+
+// ============================================================
+// WIFI RECONNECTION
+// ============================================================
+
+void maintainWiFi() {
+
+  if (WiFi.status() == WL_CONNECTED) {
+    return;
+  }
+
+  if (millis() - last_wifi_attempt < 10000) {
+    return;
+  }
+
+  last_wifi_attempt = millis();
+
+  Serial.println("[WIFI] Attempting reconnection...");
+
+  WiFi.disconnect();
+
+  WiFi.begin(ssid, password);
+
+}
+
+// ============================================================
+// SEND DATA TO SYNTERRA DASHBOARD
+// ============================================================
+
+void sendToSynterra(
+  float temperature,
+  float humidity,
+  float lux,
+  float soil_pct,
+  int raw_adc
+) {
+
+  if (WiFi.status() != WL_CONNECTED) {
+
+    Serial.println("[SYNC] WiFi unavailable.");
+
+    return;
+
+  }
 
   IPAddress gateway = WiFi.gatewayIP();
-  String url = "http://" + gateway.toString() + ":5000/api/sensors/telemetry";
+
+  String url =
+    "http://" +
+    gateway.toString() +
+    ":" +
+    String(dashboard_port) +
+    String(dashboard_path);
+
+  String payload = "{";
+
+  payload += "\"device_id\":\"";
+  payload += device_id;
+  payload += "\",";
+
+  payload += "\"plant_id\":\"";
+  payload += plant_id;
+  payload += "\",";
+
+  payload += "\"temperature_c\":";
+
+  payload += isfinite(temperature)
+    ? String(temperature, 1)
+    : "null";
+
+  payload += ",\"humidity_pct\":";
+
+  payload += isfinite(humidity)
+    ? String(humidity, 1)
+    : "null";
+
+  payload += ",\"light_lux\":";
+
+  payload += isfinite(lux)
+    ? String(lux, 1)
+    : "null";
+
+  payload += ",\"soil_moisture_pct\":";
+  payload += String(soil_pct, 1);
+
+  payload += ",\"soil_raw_adc\":";
+  payload += String(raw_adc);
+
+  payload += ",\"water_reservoir_ok\":true";
+
+  payload += "}";
 
   HTTPClient http;
-  http.setTimeout(1500);
-  if (http.begin(url)) {
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("X-Device-Token", device_token);
 
-    String payload = "{";
-    payload += "\"device_id\":\"esp32-sensor-01\",";
-    payload += "\"plant_id\":\"test-specimen-1\",";
-    payload += "\"temperature_c\":" + String(temp, 1) + ",";
-    payload += "\"humidity_pct\":" + String(hum, 1) + ",";
-    payload += "\"light_lux\":" + String(lux, 1) + ",";
-    payload += "\"soil_moisture_pct\":" + String(soil_pct, 1) + ",";
-    payload += "\"soil_raw_adc\":" + String(raw_adc) + ",";
-    payload += "\"water_reservoir_ok\":true";
-    payload += "}";
+  http.setTimeout(5000);
 
-    int code = http.POST(payload);
-    if (code == 200 || code == 201) {
-      Serial.println(F("  └─> [SYNTERRA SYNC] Sent telemetry to laptop dashboard (HTTP 200)"));
-    }
-    http.end();
+  if (!http.begin(url)) {
+
+    Serial.println("[SYNC] HTTP initialization failed.");
+
+    return;
+
   }
+
+  http.addHeader(
+    "Content-Type",
+    "application/json"
+  );
+
+  http.addHeader(
+    "X-Device-Token",
+    device_token
+  );
+
+  Serial.println("[SYNC] Sending telemetry...");
+
+  int response = http.POST(payload);
+
+  if (response > 0) {
+
+    Serial.printf(
+      "[SYNC] HTTP Response: %d\n",
+      response
+    );
+
+    if (response >= 200 && response < 300) {
+
+      Serial.println(
+        "[SYNC] Dashboard synchronization successful."
+      );
+
+    } else {
+
+      Serial.println(
+        "[SYNC] Dashboard returned an error."
+      );
+
+      String responseBody = http.getString();
+
+      Serial.println(responseBody);
+
+    }
+
+  } else {
+
+    Serial.printf(
+      "[SYNC] Request failed: %s\n",
+      http.errorToString(response).c_str()
+    );
+
+  }
+
+  http.end();
+
 }
+
+// ============================================================
+// INITIALIZE ESP32
+// ============================================================
 
 void setup() {
-#if defined(WRITE_PERI_REG) && defined(RTC_CNTL_BROWN_OUT_REG)
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // Disable brownout resets
-#endif
 
   Serial.begin(115200);
-  delay(1200);
 
-  Serial.println(F("\n=========================================================="));
-  Serial.println(F("SYNTERRA — Sensor Live Diagnostics & Dashboard Telemetry"));
-  Serial.println(F("=========================================================="));
+  delay(1000);
+
+  Serial.println();
+
+  Serial.println(
+    "=================================================="
+  );
+
+  Serial.println(
+    "          SYNTERRA SENSOR TELEMETRY"
+  );
+
+  Serial.println(
+    "=================================================="
+  );
+
+  // Soil sensor GPIO
 
   pinMode(PIN_SOIL_ADC, INPUT);
+
   pinMode(PIN_SOIL_DIG, INPUT);
-  pinMode(PIN_RELAY, OUTPUT);
-  digitalWrite(PIN_RELAY, LOW);
+
   analogReadResolution(12);
 
-  // 1. Initialize DHT11
-  Serial.println(F("[INIT] Starting DHT11 on G32..."));
+  // DHT11
+
+  Serial.println("[INIT] Starting DHT11...");
+
   dht.begin();
 
-  // 2. Initialize BH1750 using your clean base
-  Serial.printf("[INIT] Starting I2C bus on SDA=G%d, SCL=G%d...\n", PIN_I2C_SDA, PIN_I2C_SCL);
-  Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+  // BH1750
 
-  if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
-    Serial.println(F("BH1750 initialized successfully!"));
-    bh1750_ready = true;
-  } else {
-    Serial.println(F("BH1750 initialization failed! (Check SDA/SCL wires & 3V3/V5 power)"));
-  }
+  initializeBH1750();
 
-  // 3. Connect to Hotspot for Dashboard Sync
-  Serial.printf("[WIFI] Connecting to '%s'...", ssid);
-  WiFi.begin(ssid, password);
-  int retries = 0;
-  while (WiFi.status() != WL_CONNECTED && retries < 10) {
-    delay(400);
-    Serial.print(F("."));
-    retries++;
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\n[WIFI] Connected! Board IP: %s (Gateway: %s)\n",
-                  WiFi.localIP().toString().c_str(),
-                  WiFi.gatewayIP().toString().c_str());
-  } else {
-    Serial.println(F("\n[WIFI NOTE] Hotspot offline. Running serial diagnostic mode."));
-  }
+  // WiFi
 
-  Serial.println(F("=========================================================="));
-  Serial.println(F("DIAGNOSTICS ACTIVE — Reading hardware every 2 seconds..."));
-  Serial.println(F("==========================================================\n"));
+  initializeWiFi();
+
+  Serial.println();
+
+  Serial.println(
+    "[SYSTEM] Initialization completed."
+  );
+
+  Serial.println(
+    "[SYSTEM] Update interval: 20 seconds."
+  );
+
+  Serial.println(
+    "[SYSTEM] Relay: DISABLED."
+  );
+
+  Serial.println(
+    "=================================================="
+  );
+
 }
 
+// ============================================================
+// MAIN SENSOR LOOP
+// ============================================================
+
 void loop() {
+
   unsigned long now = millis();
-  if (now - last_read_time >= 2000) {
+
+  if (
+    now - last_read_time >= TELEMETRY_INTERVAL_MS ||
+    last_read_time == 0
+  ) {
+
     last_read_time = now;
+
     loop_count++;
 
-    // 1. Read DHT11 on G32
-    float temp = dht.readTemperature();
-    float hum = dht.readHumidity();
-    bool dht_ok = (!isnan(temp) && !isnan(hum) && temp > 0.0);
+    Serial.println();
 
-    // 2. Read BH1750
-    float lux = -1.0;
-    if (bh1750_ready) {
-      lux = lightMeter.readLightLevel();
-    } else {
-      // Retry initializing if it wasn't ready at boot
-      if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
-        bh1750_ready = true;
-        lux = lightMeter.readLightLevel();
-      }
-    }
+    Serial.printf(
+      "------ READING #%d ------\n",
+      loop_count
+    );
 
-    // 3. Read FC-28 Soil Moisture (5 sample average)
-    long adc_acc = 0;
-    for (int i = 0; i < 5; i++) {
-      adc_acc += analogRead(PIN_SOIL_ADC);
-      delay(4);
-    }
-    int raw_adc = adc_acc / 5;
-    float soil_pct = (float)(CALIB_AIR_DRY - raw_adc) / (float)(CALIB_AIR_DRY - CALIB_WATER_WET) * 100.0;
-    soil_pct = constrain(soil_pct, 0.0, 100.0);
+    // ---------------- DHT11 ----------------
 
-    // 4. Read Soil Digital Trigger (D0 on G35)
-    int soil_digital = digitalRead(PIN_SOIL_DIG);
+    float temperature = NAN;
 
-    // 5. Output formatted report
-    Serial.printf("─── [READING #%d] ──────────────────────────────────────────\n", loop_count);
+    float humidity = NAN;
+
+    bool dht_ok = readDHTSensor(
+      temperature,
+      humidity
+    );
 
     if (dht_ok) {
-      Serial.printf("  ✓ [DHT11]      Temp: %5.1f °C  |  Humidity: %4.1f %%  [PASS]\n", temp, hum);
+
+      Serial.printf(
+        "[DHT11] Temperature: %.1f C | Humidity: %.1f %% [PASS]\n",
+        temperature,
+        humidity
+      );
+
     } else {
-      Serial.printf("  ✗ [DHT11]      FAILED! (Check G32 wire or 3V3 power)      [FAIL]\n");
+
+      Serial.println(
+        "[DHT11] Reading failed [FAIL]"
+      );
+
     }
 
-    if (bh1750_ready && lux >= 0) {
-      Serial.printf("  ✓ [BH1750]     Light: %6.1f Lux                       [PASS]\n", lux);
+    // ---------------- BH1750 ----------------
+
+    float lux = readLightSensor();
+
+    if (isfinite(lux)) {
+
+      Serial.printf(
+        "[BH1750] Light: %.1f lux [PASS]\n",
+        lux
+      );
+
     } else {
-      Serial.printf("  ✗ [BH1750]     NOT DETECTED (Check SDA=G%d, SCL=G%d)    [FAIL]\n", PIN_I2C_SDA, PIN_I2C_SCL);
+
+      Serial.println(
+        "[BH1750] Reading unavailable [FAIL]"
+      );
+
     }
 
-    Serial.printf("  ✓ [SOIL A0]    Raw ADC: %4d   |  Moisture: %4.1f %%", raw_adc, soil_pct);
-    if (raw_adc > 3200) Serial.println(F(" (Dry In Air)"));
-    else if (raw_adc < 1600) Serial.println(F(" (Wet In Water)"));
-    else Serial.println(F(" (Moist Soil)"));
+    // ---------------- SOIL ANALOG ----------------
 
-    Serial.printf("  ✓ [SOIL D0]    Digital Alert (G35): %s\n", (soil_digital == LOW) ? "MOIST" : "DRY / THRESHOLD REACHED");
+    int raw_adc = readSoilADC();
 
-    // Click relay test every 10 readings (20 seconds)
-    if (loop_count % 10 == 0) {
-      Serial.println(F("  ⚡ [RELAY TEST] Pulsing G27 relay for 1 second..."));
-      digitalWrite(PIN_RELAY, HIGH);
-      delay(1000);
-      digitalWrite(PIN_RELAY, LOW);
-      Serial.println(F("  ⚡ [RELAY TEST] Relay click complete (OFF)."));
-    }
+    float soil_pct = calculateSoilMoisture(
+      raw_adc
+    );
 
-    // Send to SYNTERRA Dashboard over Wi-Fi
+    Serial.printf(
+      "[SOIL A0] ADC: %d | Moisture: %.1f %%\n",
+      raw_adc,
+      soil_pct
+    );
+
+    // ---------------- SOIL DIGITAL ----------------
+
+    int soil_digital = digitalRead(PIN_SOIL_DIG);
+
+    Serial.printf(
+      "[SOIL D0] Status: %s\n",
+      soil_digital == LOW
+        ? "MOIST / TRIGGERED"
+        : "DRY / NOT TRIGGERED"
+    );
+
+    // ---------------- WIFI ----------------
+
+    maintainWiFi();
+
+    // ---------------- DASHBOARD ----------------
+
     if (WiFi.status() == WL_CONNECTED) {
-      sendToSynterra(dht_ok ? temp : 24.0, dht_ok ? hum : 60.0, (bh1750_ready && lux >= 0) ? lux : 500.0, soil_pct, raw_adc);
+
+      sendToSynterra(
+        temperature,
+        humidity,
+        lux,
+        soil_pct,
+        raw_adc
+      );
+
+    } else {
+
+      Serial.println(
+        "[SYNC] Waiting for WiFi..."
+      );
+
     }
 
-    Serial.println();
+    Serial.println(
+      "------ READING COMPLETE ------"
+    );
+
   }
+
+  delay(20);
+
 }

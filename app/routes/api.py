@@ -181,14 +181,38 @@ def receive_telemetry():
                 return payload[k]
         return default
 
+    # Multi-Board Telemetry Fusion: If multiple ESP32s send partial readings,
+    # preserve the latest known values for omitted metrics
+    latest_prev = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+
+    temp_val = _get_field(['temperature_c', 'temperature', 'temp'])
+    if temp_val is None and latest_prev:
+        temp_val = latest_prev.temperature_c
+
+    hum_val = _get_field(['humidity_pct', 'humidity'])
+    if hum_val is None and latest_prev:
+        hum_val = latest_prev.humidity_pct
+
+    lux_val = _get_field(['light_lux', 'lux', 'light'])
+    if lux_val is None and latest_prev:
+        lux_val = latest_prev.light_lux
+
+    soil_val = _get_field(['soil_moisture_pct', 'soil_moisture', 'soil_pct'])
+    if soil_val is None and latest_prev:
+        soil_val = latest_prev.soil_moisture_pct
+
+    soil_adc_val = _get_field(['soil_raw_adc', 'soil_adc', 'raw_adc'])
+    if soil_adc_val is None and latest_prev:
+        soil_adc_val = latest_prev.soil_raw_adc
+
     reading = SensorReading(
         device_id=_get_field(['device_id'], 'esp32-sensor-01'),
         plant_id=_get_field(['plant_id']),
-        temperature_c=_get_field(['temperature_c', 'temperature', 'temp']),
-        humidity_pct=_get_field(['humidity_pct', 'humidity']),
-        light_lux=_get_field(['light_lux', 'lux', 'light']),
-        soil_moisture_pct=_get_field(['soil_moisture_pct', 'soil_moisture', 'soil_pct']),
-        soil_raw_adc=_get_field(['soil_raw_adc', 'soil_adc', 'raw_adc']),
+        temperature_c=temp_val,
+        humidity_pct=hum_val,
+        light_lux=lux_val,
+        soil_moisture_pct=soil_val,
+        soil_raw_adc=soil_adc_val,
         water_reservoir_ok=_get_field(['water_reservoir_ok', 'water_ok', 'reservoir_ok'], True),
     )
 
