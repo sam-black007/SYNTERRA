@@ -68,6 +68,73 @@ function getVPDStatus(vpd) {
   return { label: 'Stomata Stress / Dry Air', color: 'text-rose-400', bg: 'bg-rose-950/40' };
 }
 
+// Environmental Climate & Sensor Classification Helpers
+function getLightCondition(lux) {
+  if (lux === undefined || lux === null) return { label: 'BH1750 Offline', bg: 'bg-slate-800 text-slate-400 border-slate-700' };
+  if (lux < 25) return { label: '🌙 Night / Dark', bg: 'bg-indigo-950/60 text-indigo-300 border-indigo-700/40' };
+  if (lux < 200) return { label: '🌆 Dim / Twilight', bg: 'bg-purple-950/60 text-purple-300 border-purple-700/40' };
+  if (lux < 1000) return { label: '☁️ Cloudy / Overcast', bg: 'bg-slate-800/80 text-slate-300 border-slate-600/40' };
+  if (lux < 10000) return { label: '⛅ Daylight / Partly Cloudy', bg: 'bg-sky-950/60 text-sky-300 border-sky-700/40' };
+  if (lux < 25000) return { label: '☀️ Sunny / Clear Sky', bg: 'bg-amber-950/60 text-amber-300 border-amber-700/40' };
+  return { label: '🔥 Intense Sunlight', bg: 'bg-orange-950/60 text-orange-300 border-orange-700/40' };
+}
+
+function getSoilCondition(moisture) {
+  if (moisture === undefined || moisture === null) return { label: 'Soil Sensor Offline', bg: 'bg-slate-800 text-slate-400 border-slate-700' };
+  if (moisture < 20) return { label: '🏜️ Severe Drought', bg: 'bg-red-950/60 text-red-400 border-red-700/40' };
+  if (moisture < 40) return { label: '⚠️ Dry (Needs Water)', bg: 'bg-amber-950/60 text-amber-300 border-amber-700/40' };
+  if (moisture <= 75) return { label: '🌱 Optimal Moisture', bg: 'bg-emerald-950/60 text-emerald-300 border-emerald-700/40' };
+  if (moisture <= 90) return { label: '💧 Wet / Saturated', bg: 'bg-cyan-950/60 text-cyan-300 border-cyan-700/40' };
+  return { label: '🌊 Waterlogged', bg: 'bg-blue-950/60 text-blue-300 border-blue-700/40' };
+}
+
+function getTempCondition(temp) {
+  if (temp === undefined || temp === null) return { label: 'DHT11 Offline', bg: 'bg-slate-800 text-slate-400 border-slate-700' };
+  if (temp < 16) return { label: '❄️ Cold / Chilly', bg: 'bg-blue-950/60 text-blue-300 border-blue-700/40' };
+  if (temp < 22) return { label: '🍃 Mild / Cool', bg: 'bg-teal-950/60 text-teal-300 border-teal-700/40' };
+  if (temp <= 28) return { label: '✨ Optimal Temp', bg: 'bg-emerald-950/60 text-emerald-300 border-emerald-700/40' };
+  if (temp <= 34) return { label: '🌡️ Warm / Elevated', bg: 'bg-amber-950/60 text-amber-300 border-amber-700/40' };
+  return { label: '🔥 Extreme Heat', bg: 'bg-rose-950/60 text-rose-300 border-rose-700/40' };
+}
+
+function getHumidityCondition(hum) {
+  if (hum === undefined || hum === null) return { label: 'DHT11 Offline', bg: 'bg-slate-800 text-slate-400 border-slate-700' };
+  if (hum < 35) return { label: '🌵 Arid / Dry Air', bg: 'bg-amber-950/60 text-amber-300 border-amber-700/40' };
+  if (hum <= 65) return { label: '🌿 Ideal Humidity', bg: 'bg-cyan-950/60 text-cyan-300 border-cyan-700/40' };
+  if (hum <= 80) return { label: '🌫️ Humid / Tropical', bg: 'bg-indigo-950/60 text-indigo-300 border-indigo-700/40' };
+  return { label: '🌧️ Saturated Air', bg: 'bg-purple-950/60 text-purple-300 border-purple-700/40' };
+}
+
+function getMicroclimateState(telemetry) {
+  if (!telemetry) return { title: 'Awaiting Hardware Telemetry...', desc: 'Connect ESP32 or serial bridge', badge: 'Standby' };
+  const lux = telemetry.light_lux ?? 0;
+  const temp = telemetry.temperature_c ?? 24;
+  const hum = telemetry.humidity_pct ?? 50;
+
+  if (lux < 25) {
+    return { title: 'Nighttime / Dark Rest Phase', desc: 'Canopy transpiration paused; dark respiration active.', badge: '🌙 Night' };
+  }
+  if (lux >= 10000) {
+    if (temp >= 28) {
+      return { title: 'Intense Sunlight & Heat', desc: 'Active photosynthesis; monitor soil moisture closely for rapid evapotranspiration.', badge: '☀️ Sunny & Hot' };
+    }
+    return { title: 'Bright & Sunny Clear Sky', desc: 'Peak photochemical efficiency; optimal solar radiation for vegetative growth.', badge: '🌤️ Bright & Sunny' };
+  }
+  if (lux >= 1000) {
+    if (hum >= 75) {
+      return { title: 'Partly Cloudy & Humid', desc: 'Diffused sunlight with high ambient humidity; low transpiration stress.', badge: '⛅ Partly Cloudy & Humid' };
+    }
+    return { title: 'Partly Cloudy Daylight', desc: 'Balanced daylight illumination across canopy.', badge: '⛅ Daylight' };
+  }
+  if (lux >= 200) {
+    if (hum >= 70) {
+      return { title: 'Overcast & Rainy Climate', desc: 'High cloud cover with saturated air; reduced water uptake needed.', badge: '🌧️ Overcast & Rainy' };
+    }
+    return { title: 'Cloudy / Overcast Sky', desc: 'Soft diffused illumination under dense cloud cover.', badge: '☁️ Cloudy' };
+  }
+  return { title: 'Dim Indoors / Low Light', desc: 'Low ambient illumination; consider supplemental LED grow lights.', badge: '💡 Dim / Twilight' };
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'studio' | 'irrigation' | 'dossiers'
   const [chartSubTab, setChartSubTab] = useState('climate'); // 'climate' | 'root'
@@ -503,6 +570,12 @@ export default function App() {
   const currentVPD = calculateVPD(latestTelemetry?.temperature_c, latestTelemetry?.humidity_pct);
   const vpdInfo = getVPDStatus(currentVPD);
 
+  const lightBadge = getLightCondition(latestTelemetry?.light_lux);
+  const soilBadge = getSoilCondition(latestTelemetry?.soil_moisture_pct);
+  const tempBadge = getTempCondition(latestTelemetry?.temperature_c);
+  const humBadge = getHumidityCondition(latestTelemetry?.humidity_pct);
+  const microclimate = getMicroclimateState(latestTelemetry);
+
   return (
     <div className="min-h-screen bg-[#070b13] text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-black">
       {/* Precision Top Command Header */}
@@ -629,6 +702,27 @@ export default function App() {
               </div>
             </div>
 
+            {/* Live Microclimate Environmental Assessment Banner */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-[#101827] to-[#0c1322] border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-950/40 text-amber-400 border border-amber-900/50">
+                  <CloudSun className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Canopy Microclimate Intelligence</span>
+                    <span className="text-sm font-black text-white">{microclimate.title}</span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">{microclimate.desc}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <span className="px-3 py-1 rounded-xl text-xs font-bold bg-slate-800 border border-slate-700 text-amber-300">
+                  {microclimate.badge}
+                </span>
+              </div>
+            </div>
+
             {/* Core Metrics Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Temperature */}
@@ -646,9 +740,9 @@ export default function App() {
                   <span className="text-base font-semibold text-slate-400">°C</span>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
-                  <span>Target: 20–28°C</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-500/20">
-                    Comfort Zone
+                  <span>DHT11 Sensor</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${tempBadge.bg}`}>
+                    {tempBadge.label}
                   </span>
                 </div>
               </div>
@@ -668,9 +762,9 @@ export default function App() {
                   <span className="text-base font-semibold text-slate-400">%</span>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
-                  <span>Target: 50–70%</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-950/40 text-cyan-400 border border-cyan-500/20">
-                    Transpiration OK
+                  <span>DHT11 Sensor</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${humBadge.bg}`}>
+                    {humBadge.label}
                   </span>
                 </div>
               </div>
@@ -691,8 +785,8 @@ export default function App() {
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
                   <span>ADC: {latestTelemetry?.soil_raw_adc || '--'}</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-500/20">
-                    FC-28 Active
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${soilBadge.bg}`}>
+                    {soilBadge.label}
                   </span>
                 </div>
               </div>
@@ -713,8 +807,8 @@ export default function App() {
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
                   <span>BH1750 Sensor</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/40 text-amber-400 border border-amber-500/20">
-                    Active Daylight
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${lightBadge.bg}`}>
+                    {lightBadge.label}
                   </span>
                 </div>
               </div>

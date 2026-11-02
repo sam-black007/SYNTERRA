@@ -2,10 +2,9 @@
  * ==============================================================================
  * SYNTERRA — Enterprise Sensor Manager Firmware
  * ==============================================================================
- * Board: USB-C ESP32 Dev Module (Standard 38-Pin / DevKit V1)
+ * Board: USB-C ESP32 Dev Module (Standard 30/38-Pin DevKit)
  *
- * Encapsulated Sensor Architecture:
- *   - Class: SensorManager
+ * Hardware Wiring:
  *   - DHT11 Data Pin:        D32 (GPIO 32)
  *   - FC-28 Soil Moisture:   A0 = D34 (ADC1_CH6), D0 = D35
  *   - BH1750 Light Meter:    SDA = D21, SCL = D22 (Hardware I2C)
@@ -13,7 +12,13 @@
  *   - Power Bus:             VIN (5V for BH1750 & Relay) | 3V3 (Soil & DHT11) | GND
  *
  * Telemetry Pipeline:
- *   - Cadence: 6 seconds
+ *   - Cadence: 6 SECONDS (6000 ms)
+ *   - Environmental Climate & Condition Classification Engine:
+ *       * Light:       Night, Dim/Twilight, Cloudy, Partly Cloudy, Sunny, Intense Sun
+ *       * Temperature: Cold, Mild, Optimal, Warm, Extreme Heat
+ *       * Humidity:    Arid, Ideal, Humid/Tropical, Saturated
+ *       * Soil:        Severe Drought, Dry (Needs Water), Optimal Root Moisture, Saturated
+ *       * Microclimate: Combined Macro-Atmospheric State Summary
  *   - Dual-Link Redundancy: USB Cable Serial JSON + Wi-Fi HTTP REST POST
  * ==============================================================================
  */
@@ -44,6 +49,11 @@ struct BotanicalTelemetry {
   bool bh1750_online;
   bool soil_online;
   bool reservoir_ok;
+  String light_condition;
+  String soil_condition;
+  String temp_condition;
+  String humidity_condition;
+  String climate_summary;
   unsigned long timestamp_ms;
 };
 
@@ -52,7 +62,7 @@ struct BotanicalTelemetry {
 // ==============================================================================
 class SensorManager {
 private:
-  // Hardware Pins
+  // Hardware Pins from Board Silkscreen
   const uint8_t pin_dht       = 32;  // D32
   const uint8_t pin_soil_adc  = 34;  // D34 (ADC1_CH6)
   const uint8_t pin_soil_dig  = 35;  // D35
@@ -144,12 +154,65 @@ public:
   }
 
   // --------------------------------------------------------------------------
+  // Climate & Sensor Condition Classification Helpers
+  // --------------------------------------------------------------------------
+  static String inferLightCondition(float lux) {
+    if (lux < 0.0) return "SENSOR OFFLINE";
+    if (lux < 25.0) return "NIGHT / DARK";
+    if (lux < 200.0) return "DIM / TWILIGHT";
+    if (lux < 1000.0) return "CLOUDY / OVERCAST";
+    if (lux < 10000.0) return "DAYLIGHT / PARTLY CLOUDY";
+    if (lux < 25000.0) return "SUNNY / CLEAR SKY";
+    return "INTENSE SUNLIGHT";
+  }
+
+  static String inferSoilCondition(float moisture_pct) {
+    if (moisture_pct < 20.0) return "CRITICAL DRY (DROUGHT)";
+    if (moisture_pct < 40.0) return "DRY (WATER NEEDED)";
+    if (moisture_pct <= 75.0) return "OPTIMAL ROOT MOISTURE";
+    if (moisture_pct <= 90.0) return "WET / SATURATED";
+    return "WATERLOGGED";
+  }
+
+  static String inferTempCondition(float temp_c) {
+    if (temp_c < 16.0) return "COLD / CHILLY";
+    if (temp_c < 22.0) return "MILD / COOL";
+    if (temp_c <= 28.0) return "OPTIMAL PLANT TEMP";
+    if (temp_c <= 34.0) return "WARM / ELEVATED";
+    return "EXTREME HEATWAVE";
+  }
+
+  static String inferHumidityCondition(float hum_pct) {
+    if (hum_pct < 35.0) return "ARID / DRY AIR";
+    if (hum_pct <= 65.0) return "IDEAL CANOPY HUMIDITY";
+    if (hum_pct <= 80.0) return "HUMID / TROPICAL";
+    return "SATURATED / SULTRY";
+  }
+
+  static String inferClimateSummary(float lux, float temp_c, float hum_pct) {
+    if (lux < 25.0) return "NIGHT (REST PERIOD)";
+    if (lux >= 10000.0) {
+      if (temp_c >= 28.0) return "HOT & SUNNY";
+      return "BRIGHT & SUNNY";
+    }
+    if (lux >= 1000.0) {
+      if (hum_pct >= 75.0) return "PARTLY CLOUDY & HUMID";
+      return "PARTLY CLOUDY & PLEASANT";
+    }
+    if (lux >= 200.0) {
+      if (hum_pct >= 70.0) return "OVERCAST & RAINY/HUMID";
+      return "CLOUDY / OVERCAST";
+    }
+    return "DIM INDOORS / LOW LIGHT";
+  }
+
+  // --------------------------------------------------------------------------
   // Synchronous Multi-Sensor Read
   // --------------------------------------------------------------------------
   BotanicalTelemetry readAll() {
     BotanicalTelemetry data;
     data.timestamp_ms = millis();
-    data.reservoir_ok = true; // Auto-set true
+    data.reservoir_ok = true;
 
     // 1. Read DHT11 Temperature & Humidity
     data.temperature_c = dht.readTemperature();
@@ -178,7 +241,6 @@ public:
       data.light_lux = lightMeter.readLightLevel();
       data.bh1750_online = (data.light_lux >= 0.0);
     } else {
-      // Dynamic retry if sensor was plugged in late
       if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
         bh1750_initialized = true;
         data.light_lux = lightMeter.readLightLevel();
@@ -187,6 +249,13 @@ public:
         data.bh1750_online = false;
       }
     }
+
+    // 4. Determine Environmental Classifications & Microclimate State
+    data.light_condition    = inferLightCondition(data.light_lux);
+    data.soil_condition     = inferSoilCondition(data.soil_moisture_pct);
+    data.temp_condition     = inferTempCondition(data.temperature_c);
+    data.humidity_condition = inferHumidityCondition(data.humidity_pct);
+    data.climate_summary    = inferClimateSummary(data.light_lux, data.temperature_c, data.humidity_pct);
 
     return data;
   }
@@ -203,30 +272,30 @@ public:
   }
 
   // --------------------------------------------------------------------------
-  // Diagnostic Serial Formatter
+  // Diagnostic Serial Formatter (With Climate & Condition Badges)
   // --------------------------------------------------------------------------
   void printDiagnostics(const BotanicalTelemetry& data, int cycle) {
-    Serial.printf("─── [TELEMETRY CYCLE #%d] ──────────────────────────────────\n", cycle);
-
-    // DHT11 Report
-    if (data.dht_online) {
-      Serial.printf("  ✓ [DHT11]      Temp: %5.1f °C  |  Humidity: %4.1f %%  [PASS]\n", data.temperature_c, data.humidity_pct);
-    } else {
-      Serial.printf("  ✗ [DHT11]      COMMUNICATION FAULT (Check D%d Wire)      [FAIL]\n", pin_dht);
-    }
+    Serial.printf("─── [TELEMETRY CYCLE #%d (EVERY 6s)] ────────────────────────────────\n", cycle);
+    Serial.printf("  🌤️  [CLIMATE STATE]   >>> %s <<<\n", data.climate_summary.c_str());
 
     // BH1750 Report
     if (data.bh1750_online) {
-      Serial.printf("  ✓ [BH1750]     Canopy Illumination: %6.1f Lux       [PASS]\n", data.light_lux);
+      Serial.printf("  ✓ [BH1750]  Light:     %6.1f Lux  --> [%s]\n", data.light_lux, data.light_condition.c_str());
     } else {
-      Serial.println(F("  ✗ [BH1750]     NOT DETECTED (Check D21=SDA, D22=SCL)    [FAIL]"));
+      Serial.println(F("  ✗ [BH1750]  Light:     NOT DETECTED (Check D21=SDA, D22=SCL)"));
+    }
+
+    // DHT11 Report
+    if (data.dht_online) {
+      Serial.printf("  ✓ [DHT11]   Temp:      %5.1f °C   --> [%s]\n", data.temperature_c, data.temp_condition.c_str());
+      Serial.printf("              Humidity:  %5.1f %%   --> [%s]\n", data.humidity_pct, data.humidity_condition.c_str());
+    } else {
+      Serial.printf("  ✗ [DHT11]   COMMUNICATION FAULT (Check D%d Wire)\n", pin_dht);
     }
 
     // Soil Moisture Report
-    Serial.printf("  ✓ [SOIL A0]    Raw ADC: %4d   |  Moisture: %4.1f %%", data.soil_raw_adc, data.soil_moisture_pct);
-    if (data.soil_raw_adc > 3200) Serial.println(F(" (Substrate Dry)"));
-    else if (data.soil_raw_adc < 1600) Serial.println(F(" (Substrate Saturated)"));
-    else Serial.println(F(" (Optimal Root Moisture)"));
+    Serial.printf("  ✓ [SOIL A0] Moisture:  %5.1f %% (ADC %4d) --> [%s]\n",
+                  data.soil_moisture_pct, data.soil_raw_adc, data.soil_condition.c_str());
   }
 
   // --------------------------------------------------------------------------
@@ -242,7 +311,12 @@ public:
     payload += "\"soil_raw_adc\":" + String(data.soil_raw_adc) + ",";
     if (data.bh1750_online) {
       payload += "\"light_lux\":" + String(data.light_lux, 1) + ",";
+      payload += "\"light_condition\":\"" + data.light_condition + "\",";
     }
+    payload += "\"soil_condition\":\"" + data.soil_condition + "\",";
+    payload += "\"temp_condition\":\"" + data.temp_condition + "\",";
+    payload += "\"humidity_condition\":\"" + data.humidity_condition + "\",";
+    payload += "\"climate\":\"" + data.climate_summary + "\",";
     payload += "\"water_reservoir_ok\":true";
     payload += "}";
     return payload;
@@ -279,11 +353,11 @@ public:
 };
 
 // ==============================================================================
-// 3. Application Execution Loop
+// 3. Application Execution Loop (Every 6 Seconds)
 // ==============================================================================
 SensorManager sensorManager;
 unsigned long lastTelemetryTime = 0;
-const unsigned long telemetryInterval = 6000; // 6-Second Cadence
+const unsigned long telemetryInterval = 6000; // 6-Second Cadence (6000 ms)
 int telemetryCycle = 0;
 
 void setup() {
@@ -304,11 +378,12 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
 
+  // Non-blocking 6-second timer
   if (currentMillis - lastTelemetryTime >= telemetryInterval || lastTelemetryTime == 0) {
     lastTelemetryTime = currentMillis;
     telemetryCycle++;
 
-    // 1. Read all sensors synchronously
+    // 1. Read all sensors synchronously with climate inference
     BotanicalTelemetry telemetry = sensorManager.readAll();
 
     // 2. Output formatted report to Serial Monitor
@@ -318,10 +393,10 @@ void loop() {
     String jsonTelemetry = sensorManager.toJSON(telemetry);
     Serial.println(jsonTelemetry);
 
-    // 4. Dispatch over Wi-Fi (Option 2 Wireless Stream)
+    // 4. Dispatch over Wi-Fi (Option 2 Wireless Stream directly to dashboard)
     sensorManager.dispatchWiFi(telemetry);
 
-    // 5. Periodic actuator self-test every 10 cycles (~100s)
+    // 5. Periodic actuator self-test every 10 cycles (~60s)
     if (telemetryCycle % 10 == 0) {
       sensorManager.pulseRelay(1000);
     }
