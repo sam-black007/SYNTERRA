@@ -2,13 +2,17 @@
  * ==============================================================================
  * SYNTERRA — Sensor Hardware Live Diagnostics & Bench Test
  * ==============================================================================
+ * Board: ESP32 Dev Module (standard 30/38-pin ESP32-WROOM-32)
  *
- * Board: ESP32 Dev Module (standard ESP32-WROOM-32) or ESP32-S3
+ * 100% TOP-ROW (3V3 ROW) WIRING:
+ * All sensors connect exclusively to the single top row containing 3V3!
  *
- * Required Arduino Libraries (Install via Arduino Library Manager):
- *   1. "DHT sensor library" by Adafruit
- *   2. "BH1750" by Christopher Laws
- *   3. "Adafruit Unified Sensor" by Adafruit
+ *   - DHT11 Data Pin:        G27  (GPIO 27)  | VCC to 3V3, GND to GND
+ *   - BH1750 Light Meter:    SDA = G26 (GPIO 26), SCL = G25 (GPIO 25) | VCC to 3V3, GND to GND
+ *   - FC-28 Soil Moisture:   A0 (Analog) = G34 (GPIO 34 / ADC1)       | VCC to 3V3, GND to GND
+ *   - Float Switch (Water):  G33  (GPIO 33 with INPUT_PULLUP) to GND
+ *   - Relay Module (Pump):   Signal IN = G14 (GPIO 14)                | VCC to V5 (5V), GND to GND
+ *   - Power Pins:            3V3 (Far Right), GND (Pin 6), V5 (Far Left)
  * ==============================================================================
  */
 
@@ -19,7 +23,7 @@
 #include <DHT.h>
 #include <BH1750.h>
 
-// Brownout register header (optional for ESP32)
+// Brownout register header (guarded for ESP32 Core 3.x)
 #if __has_include("soc/soc.h") && __has_include("soc/rtc_cntl_reg.h")
   #include "soc/soc.h"
   #include "soc/rtc_cntl_reg.h"
@@ -29,7 +33,7 @@
 // Automatic Pin Detection ("ESP32 Dev Module" vs "ESP32-S3")
 // ==============================================================================
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
-  // ESP32-S3 Pin Mapping
+  // ESP32-S3 Pinout
   #define PIN_DHT          2       // DHT11 Data Pin
   #define PIN_I2C_SDA      4       // BH1750 I2C Data
   #define PIN_I2C_SCL      5       // BH1750 I2C Clock
@@ -38,20 +42,20 @@
   #define PIN_RELAY        42      // Solenoid / Pump Relay Control
   #define BOARD_NAME       "ESP32-S3"
 #else
-  // Standard "ESP32 Dev Module" (ESP32-WROOM-32 / DevKit v1) Pin Mapping
-  #define PIN_DHT          4       // DHT11 Data Pin (GPIO 4)
-  #define PIN_I2C_SDA      21      // BH1750 I2C Data (Standard GPIO 21)
-  #define PIN_I2C_SCL      22      // BH1750 I2C Clock (Standard GPIO 22)
-  #define PIN_SOIL_ADC     34      // FC-28 Analog Out (ADC1 CH6 - GPIO 34)
-  #define PIN_FLOAT_SW     19      // Water Level Switch (GPIO 19 with Internal Pullup)
-  #define PIN_RELAY        23      // Solenoid / Pump Relay Control (GPIO 23)
-  #define BOARD_NAME       "ESP32 Dev Module"
+  // Standard "ESP32 Dev Module" Top-Row (3V3 Row) Pinout:
+  #define PIN_DHT          27      // DHT11 Data Pin (Top Row: G27)
+  #define PIN_I2C_SDA      26      // BH1750 I2C Data (Top Row: G26)
+  #define PIN_I2C_SCL      25      // BH1750 I2C Clock (Top Row: G25)
+  #define PIN_SOIL_ADC     34      // FC-28 Analog Out (Top Row: G34 / ADC1_CH6)
+  #define PIN_FLOAT_SW     33      // Water Level Switch (Top Row: G33 with Pullup)
+  #define PIN_RELAY        14      // Solenoid / Pump Relay Control (Top Row: G14)
+  #define BOARD_NAME       "ESP32 Dev Module (3V3 Row Setup)"
 #endif
 
 #define DHTTYPE DHT11
 
 // Calibration range for 12-bit ADC (0 - 4095)
-// Dry (Air): ~3200 - 3600 | Submerged in Water: ~1200 - 1500
+// Dry (In Air): ~3200 - 3600 | Submerged in Water: ~1200 - 1500
 const int CALIB_AIR_DRY   = 3400;
 const int CALIB_WATER_WET = 1300;
 
