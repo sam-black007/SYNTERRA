@@ -4,15 +4,18 @@
  * ==============================================================================
  * Board: ESP32 Dev Module (standard 30/38-pin ESP32-WROOM-32)
  *
- * 100% TOP-ROW (3V3 ROW) WIRING:
- * All sensors connect exclusively to the single top row containing 3V3!
+ * 100% SEQUENTIAL TOP-ROW (3V3 ROW) WIRING:
+ * All sensors connect in strict physical order along the top row:
  *
- *   - DHT11 Data Pin:        G27  (GPIO 27)  | VCC to 3V3, GND to GND
- *   - BH1750 Light Meter:    SDA = G26 (GPIO 26), SCL = G25 (GPIO 25) | VCC to 3V3, GND to GND
- *   - FC-28 Soil Moisture:   A0 (Analog) = G34 (GPIO 34 / ADC1)       | VCC to 3V3, GND to GND
- *   - Float Switch (Water):  G33  (GPIO 33 with INPUT_PULLUP) to GND
- *   - Relay Module (Pump):   Signal IN = G14 (GPIO 14)                | VCC to V5 (5V), GND to GND
- *   - Power Pins:            3V3 (Far Right), GND (Pin 6), V5 (Far Left)
+ *   1. 3V3             -> 3.3V Power Rail (Powers DHT11, BH1750, FC-28)
+ *   2. G34 (GPIO 34)   -> FC-28 Soil Moisture A0 (Analog ADC1)
+ *   3. G32 (GPIO 32)   -> DHT11 Data Pin (Bidirectional Digital I/O)
+ *   4. G33 (GPIO 33)   -> Float Switch (Water Reservoir with INPUT_PULLUP)
+ *   5. G25 (GPIO 25)   -> BH1750 I2C SCL (Clock)
+ *   6. G26 (GPIO 26)   -> BH1750 I2C SDA (Data)
+ *   7. G27 (GPIO 27)   -> Relay Module Signal IN (Pump Control Output)
+ *   8. GND (Pin 6)     -> Common Ground (All sensor GNDs + BH1750 ADDR/ADO)
+ *   9. V5 (Far Left)   -> Relay Module VCC (5V Power for Relay Coil)
  * ==============================================================================
  */
 
@@ -42,14 +45,14 @@
   #define PIN_RELAY        42      // Solenoid / Pump Relay Control
   #define BOARD_NAME       "ESP32-S3"
 #else
-  // Standard "ESP32 Dev Module" Top-Row (3V3 Row) Pinout:
-  #define PIN_DHT          27      // DHT11 Data Pin (Top Row: G27)
-  #define PIN_I2C_SDA      26      // BH1750 I2C Data (Top Row: G26)
+  // Standard "ESP32 Dev Module" 100% Sequential Top-Row (3V3 Row) Pinout:
+  #define PIN_SOIL_ADC     34      // FC-28 Soil Moisture A0 (Top Row: G34 / ADC1_CH6)
+  #define PIN_DHT          32      // DHT11 Data Pin (Top Row: G32 - Bidirectional)
+  #define PIN_FLOAT_SW     33      // Water Reservoir Float Switch (Top Row: G33 with Pullup)
   #define PIN_I2C_SCL      25      // BH1750 I2C Clock (Top Row: G25)
-  #define PIN_SOIL_ADC     34      // FC-28 Analog Out (Top Row: G34 / ADC1_CH6)
-  #define PIN_FLOAT_SW     33      // Water Level Switch (Top Row: G33 with Pullup)
-  #define PIN_RELAY        14      // Solenoid / Pump Relay Control (Top Row: G14)
-  #define BOARD_NAME       "ESP32 Dev Module (3V3 Row Setup)"
+  #define PIN_I2C_SDA      26      // BH1750 I2C Data (Top Row: G26)
+  #define PIN_RELAY        27      // Solenoid / Pump Relay Control (Top Row: G27)
+  #define BOARD_NAME       "ESP32 Dev Module (Sequential Top-Row)"
 #endif
 
 #define DHTTYPE DHT11

@@ -70,14 +70,14 @@ const char* fallback_server_ip = "192.168.137.10";
   #define PIN_WATER_RESERVOIR 41       // Water Level Switch (Internal Pullup)
   #define PIN_RELAY           42       // Pump Relay
 #else
-  // Standard "ESP32 Dev Module" Top-Row (3V3 Row) Pinout:
-  #define PIN_DHT             27       // DHT11 Data Pin (Top Row: G27)
-  #define PIN_I2C_SDA         26       // BH1750 I2C Data (Top Row: G26)
-  #define PIN_I2C_SCL         25       // BH1750 I2C Clock (Top Row: G25)
-  #define PIN_SOIL_ANALOG     34       // FC-28 Analog Out (Top Row: G34 / ADC1_CH6)
-  #define PIN_SOIL_DIGITAL    35       // (Optional DO pin - G35)
+  // Standard "ESP32 Dev Module" 100% Sequential Top-Row (3V3 Row) Pinout:
+  #define PIN_SOIL_ANALOG     34       // FC-28 Soil Moisture A0 (Top Row: G34 / ADC1_CH6)
+  #define PIN_DHT             32       // DHT11 Data Pin (Top Row: G32 - Bidirectional)
   #define PIN_WATER_RESERVOIR 33       // Water Level Switch (Top Row: G33 with Pullup)
-  #define PIN_RELAY           14       // Pump Relay (Top Row: G14)
+  #define PIN_I2C_SCL         25       // BH1750 I2C Clock (Top Row: G25)
+  #define PIN_I2C_SDA         26       // BH1750 I2C Data (Top Row: G26)
+  #define PIN_RELAY           27       // Solenoid / Pump Relay Control (Top Row: G27)
+  #define PIN_SOIL_DIGITAL    35       // (Optional DO pin - G35)
 #endif
 
 // Calibration constants for FC-28 (12-bit ADC: 0 - 4095)
