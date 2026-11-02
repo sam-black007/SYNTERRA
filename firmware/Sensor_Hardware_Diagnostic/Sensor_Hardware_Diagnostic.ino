@@ -54,7 +54,7 @@ bool bh1750_found = false;
 unsigned long last_read_time = 0;
 int loop_count = 0;
 
-// Direct hardware read for BH1750 (works even if library has version quirks)
+// Direct hardware read for BH1750 (works even if library has timing quirks)
 float readBH1750Direct(byte addr) {
   Wire.beginTransmission(addr);
   Wire.write(0x10); // Continuous High-Resolution Mode (1 lx resolution)
@@ -106,7 +106,7 @@ bool autoDetectBH1750() {
       current_scl = scl;
       bh1750_address = 0x5C;
       bh1750_found = true;
-      Serial.printf("[AUTO-DETECT] SUCCESS! Found BH1750 at 0x5C using SDA=G%d, SCL=G%d (ADDR is HIGH/floating)\n", sda, scl);
+      Serial.printf("[AUTO-DETECT] SUCCESS! Found BH1750 at 0x5C using SDA=G%d, SCL=G%d\n", sda, scl);
       lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x5C, &Wire);
       return true;
     }
@@ -233,10 +233,9 @@ void loop() {
 
     float lux = -1.0;
     if (bh1750_found) {
-      // First try library read, fallback to direct I2C read if library returns negative
       lux = lightMeter.readLightLevel();
       if (lux < 0.0) {
-        lux = readBH1750Direct(bh1750_address);
+        lux = readBH1750Direct(bh1750_address); // Hardware fallback
       }
     }
 

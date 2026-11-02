@@ -93,7 +93,58 @@ DHT dht(PIN_DHT, DHTTYPE);
 BH1750 lightMeter;
 
 bool bh1750_available = false;
+byte bh1750_addr = 0x23;
 unsigned long last_telemetry_time = 0;
+
+// Direct hardware read fallback for BH1750
+float readBH1750Direct(byte addr) {
+  Wire.beginTransmission(addr);
+  Wire.write(0x10); // Continuous High-Resolution Mode (1 lx)
+  if (Wire.endTransmission() != 0) return -1.0;
+  delay(180);
+  if (Wire.requestFrom((int)addr, 2) == 2) {
+    unsigned int raw = (Wire.read() << 8) | Wire.read();
+    return (float)raw / 1.2;
+  }
+  return -1.0;
+}
+
+// Auto-detector: Tries both (SDA=26, SCL=25) and (SDA=25, SCL=26), checking 0x23 and 0x5C
+bool autoDetectBH1750() {
+  int configs[2][2] = {
+    {PIN_I2C_SDA, PIN_I2C_SCL},
+    {PIN_I2C_SCL, PIN_I2C_SDA}
+  };
+
+  for (int c = 0; c < 2; c++) {
+    int sda = configs[c][0];
+    int scl = configs[c][1];
+
+    Wire.end();
+    delay(30);
+    pinMode(sda, INPUT_PULLUP);
+    pinMode(scl, INPUT_PULLUP);
+    Wire.begin(sda, scl, 100000);
+    delay(50);
+
+    Wire.beginTransmission(0x23);
+    if (Wire.endTransmission() == 0) {
+      bh1750_addr = 0x23;
+      bh1750_available = true;
+      lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x23, &Wire);
+      return true;
+    }
+
+    Wire.beginTransmission(0x5C);
+    if (Wire.endTransmission() == 0) {
+      bh1750_addr = 0x5C;
+      bh1750_available = true;
+      lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x5C, &Wire);
+      return true;
+    }
+  }
+  return false;
+}
 
 // Helper: Post telemetry wirelessly directly to SYNTERRA backend
 void sendTelemetryOverWifi(const String& jsonPayload) {
@@ -146,14 +197,11 @@ void setup() {
     // 1. Initialize DHT11
     dht.begin();
 
-    // 2. Initialize I2C for BH1750 (with 30ms bus timeout)
-    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
-    Wire.setTimeOut(30);
-    if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
-      bh1750_available = true;
+    // 2. Initialize I2C for BH1750 (Auto-detection)
+    if (autoDetectBH1750()) {
       Serial.println(F("{\"sensor\": \"BH1750\", \"status\": \"online\"}"));
     } else {
-      Serial.println(F("{\"sensor\": \"BH1750\", \"status\": \"offline\", \"warning\": \"check I2C wiring\"}"));
+      Serial.println(F("{\"sensor\": \"BH1750\", \"status\": \"searching\", \"warning\": \"check I2C wiring\"}"));
     }
 
     // 3. Configure GPIOs
@@ -234,9 +282,15 @@ void loop() {
       }
 
       // 2. Read BH1750
+      if (!bh1750_available) {
+        autoDetectBH1750();
+      }
       if (bh1750_available) {
         light_lux = lightMeter.readLightLevel();
-        if (light_lux < 0) light_lux = 0.0;
+        if (light_lux < 0.0) {
+          light_lux = readBH1750Direct(bh1750_addr);
+        }
+        if (light_lux < 0.0) light_lux = 0.0;
       }
 
       // 3. Read FC-28 Soil Moisture
