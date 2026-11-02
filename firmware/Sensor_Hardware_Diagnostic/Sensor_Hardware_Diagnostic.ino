@@ -19,22 +19,10 @@
  * ==============================================================================
  */
 
-// SELECT YOUR BOARD TYPE:
-#define BOARD_ESP32_S3
-//#define BOARD_STANDARD_ESP32
-
-#include <Wire.h>
-#include <DHT.h>
-#include <BH1750.h>
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include "soc/soc.h"
-#include "soc/rtc_cntl_reg.h"
-
 // ==============================================================================
-// Pin Assignments
+// Automatic Pin Detection (ESP32 Dev Module vs ESP32-S3)
 // ==============================================================================
-#if defined(BOARD_ESP32_S3)
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
   // ESP32-S3 Pin Mapping
   #define PIN_DHT          2       // DHT11 Data Pin
   #define PIN_I2C_SDA      4       // BH1750 I2C Data
@@ -42,14 +30,16 @@
   #define PIN_SOIL_ADC     1       // FC-28 Analog Out (ADC1 CH0)
   #define PIN_FLOAT_SW     41      // Water Level Switch (Internal Pullup)
   #define PIN_RELAY        42      // Solenoid / Pump Relay Control
+  #define BOARD_NAME       "ESP32-S3"
 #else
-  // Standard ESP32-WROOM Pin Mapping
-  #define PIN_DHT          4       // DHT11 Data Pin
-  #define PIN_I2C_SDA      21      // BH1750 I2C Data
-  #define PIN_I2C_SCL      22      // BH1750 I2C Clock
-  #define PIN_SOIL_ADC     34      // FC-28 Analog Out (ADC1 CH6)
-  #define PIN_FLOAT_SW     19      // Water Level Switch (Internal Pullup)
-  #define PIN_RELAY        23      // Solenoid / Pump Relay Control
+  // Standard "ESP32 Dev Module" (ESP32-WROOM-32 / DevKit v1) Pin Mapping
+  #define PIN_DHT          4       // DHT11 Data Pin (GPIO 4)
+  #define PIN_I2C_SDA      21      // BH1750 I2C Data (Standard GPIO 21)
+  #define PIN_I2C_SCL      22      // BH1750 I2C Clock (Standard GPIO 22)
+  #define PIN_SOIL_ADC     34      // FC-28 Analog Out (ADC1 CH6 - GPIO 34)
+  #define PIN_FLOAT_SW     19      // Water Level Switch (GPIO 19 with Internal Pullup)
+  #define PIN_RELAY        23      // Solenoid / Pump Relay Control (GPIO 23)
+  #define BOARD_NAME       "ESP32 Dev Module"
 #endif
 
 #define DHTTYPE DHT11

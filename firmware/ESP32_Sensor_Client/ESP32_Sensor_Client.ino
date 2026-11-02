@@ -55,17 +55,26 @@ const char* device_token = "plant-lab-auth-token-9981";  // Matched to .env DEVI
 const char* fallback_server_ip = "192.168.137.10";
 
 // ==============================================================================
-// Pin Definitions
+// Pin Definitions (Auto-detects "ESP32 Dev Module" vs "ESP32-S3")
 // ==============================================================================
-#define PIN_DHT             2
-#define DHTTYPE             DHT11
-
-#define PIN_I2C_SDA         4
-#define PIN_I2C_SCL         5
-
-#define PIN_SOIL_ANALOG     1
-#define PIN_SOIL_DIGITAL    40
-#define PIN_WATER_RESERVOIR 41
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+  #define PIN_DHT             2        // DHT11 Data Pin
+  #define PIN_I2C_SDA         4        // BH1750 I2C Data
+  #define PIN_I2C_SCL         5        // BH1750 I2C Clock
+  #define PIN_SOIL_ANALOG     1        // FC-28 Analog Out (ADC1 CH0)
+  #define PIN_SOIL_DIGITAL    40
+  #define PIN_WATER_RESERVOIR 41       // Water Level Switch (Internal Pullup)
+  #define PIN_RELAY           42       // Pump Relay
+#else
+  // Standard "ESP32 Dev Module" (ESP32-WROOM-32 / DevKit v1) Pin Mapping
+  #define PIN_DHT             4        // DHT11 Data Pin (GPIO 4)
+  #define PIN_I2C_SDA         21       // BH1750 I2C Data (Standard GPIO 21)
+  #define PIN_I2C_SCL         22       // BH1750 I2C Clock (Standard GPIO 22)
+  #define PIN_SOIL_ANALOG     34       // FC-28 Analog Out (ADC1 CH6 - GPIO 34)
+  #define PIN_SOIL_DIGITAL    35
+  #define PIN_WATER_RESERVOIR 19       // Water Level Switch (GPIO 19 with Internal Pullup)
+  #define PIN_RELAY           23       // Pump Relay (GPIO 23)
+#endif
 
 // Calibration constants for FC-28 (12-bit ADC: 0 - 4095)
 // In air (completely dry): ~3300 - 3600
@@ -125,7 +134,7 @@ void setup() {
   delay(1500); // Allow USB CDC connection to stabilize
 
   Serial.println();
-  Serial.println(F("{\"system\": \"SYNTERRA ESP32-S3 Client\", \"status\": \"booting\"}"));
+  Serial.println(F("{\"system\": \"SYNTERRA ESP32 Sensor Client\", \"status\": \"booting\"}"));
 
   if (!SIMULATION_MODE) {
     // 1. Initialize DHT11
@@ -145,8 +154,10 @@ void setup() {
     pinMode(PIN_SOIL_ANALOG, INPUT);
     pinMode(PIN_SOIL_DIGITAL, INPUT);
     pinMode(PIN_WATER_RESERVOIR, INPUT_PULLUP);
+    pinMode(PIN_RELAY, OUTPUT);
+    digitalWrite(PIN_RELAY, LOW); // Relay OFF by default
 
-    // ADC Resolution: ESP32-S3 supports up to 12 bits (0 - 4095)
+    // ADC Resolution: ESP32 supports 12 bits (0 - 4095)
     analogReadResolution(12);
   } else {
     Serial.println(F("{\"mode\": \"SIMULATION_MODE_ENABLED\"}"));
