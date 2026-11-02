@@ -18,7 +18,7 @@ class CameraService:
         self.height = 480
         self._last_probe_time = 0
         self._is_hardware_available = False
-        self._probe_cooldown_seconds = 10.0
+        self._probe_cooldown_seconds = 8.0
 
     @property
     def target_cam_url(self):
@@ -27,9 +27,90 @@ class CameraService:
         try:
             from flask import current_app
             url = current_app.config.get('ESP32_CAM_URL', current_app.config.get('ESP32_BASE_URL', ''))
-            return url.rstrip('/') if url else ''
+            if url:
+                return url.rstrip('/')
         except Exception:
-            return os.getenv('ESP32_CAM_URL', os.getenv('ESP32_BASE_URL', '')).rstrip('/')
+            env_url = os.getenv('ESP32_CAM_URL', os.getenv('ESP32_BASE_URL', ''))
+            if env_url:
+                return env_url.rstrip('/')
+        return 'http://synterra-cam.local'
+
+    def set_camera_url(self, url):
+        """Manually or dynamically bind active camera URL."""
+        if not url:
+            self.esp32_cam_url = None
+            return
+        clean = url.strip()
+        if not clean.startswith('http://') and not clean.startswith('https://'):
+            clean = f"http://{clean}"
+        self.esp32_cam_url = clean.rstrip('/')
+        self.check_hardware_online(force=True)
+
+    @staticmethod
+    def get_network_info():
+        """Retrieve local host IP addresses for mobile hotspot and LAN adapters."""
+        import socket
+        try:
+            hostname = socket.gethostname()
+            _, _, ips = socket.gethostbyname_ex(hostname)
+            valid_ips = [ip for ip in ips if not ip.startswith('127.')]
+            return {
+                'hostname': hostname,
+                'ips': valid_ips,
+                'default_ip': valid_ips[0] if valid_ips else '127.0.0.1'
+            }
+        except Exception:
+            return {'hostname': 'unknown', 'ips': ['127.0.0.1'], 'default_ip': '127.0.0.1'}
+
+    def discover_camera(self):
+        """Auto-discover ESP32-S3 camera via mDNS or rapid multi-threaded subnet sweep."""
+        import concurrent.futures
+
+        # 1. Try mDNS first
+        try:
+            r = requests.get('http://synterra-cam.local/status', timeout=(0.4, 0.7))
+            if r.status_code == 200 and 'SYNTERRA' in r.text:
+                self.set_camera_url('http://synterra-cam.local')
+                return {'found': True, 'method': 'mDNS', 'url': 'http://synterra-cam.local', 'data': r.json()}
+        except Exception:
+            pass
+
+        # 2. Get local subnets from network interfaces (including Windows Hotspot 192.168.137)
+        net = self.get_network_info()
+        subnets = set()
+        for ip in net.get('ips', []):
+            parts = ip.split('.')
+            if len(parts) == 4:
+                subnets.add(f"{parts[0]}.{parts[1]}.{parts[2]}")
+        subnets.add('192.168.137')
+
+        def _check_ip(ip_str):
+            try:
+                res = requests.get(f"http://{ip_str}/status", timeout=(0.12, 0.22))
+                if res.status_code == 200 and 'SYNTERRA' in res.text:
+                    return ip_str, res.json()
+            except Exception:
+                pass
+            return None
+
+        # Build candidate IPs across detected subnets
+        candidate_ips = []
+        for subnet in subnets:
+            for host_num in range(1, 255):
+                candidate_ips.append(f"{subnet}.{host_num}")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=60) as executor:
+            future_to_ip = {executor.submit(_check_ip, ip): ip for ip in candidate_ips}
+            for future in concurrent.futures.as_completed(future_to_ip):
+                result = future.result()
+                if result:
+                    found_ip, data = result
+                    found_url = f"http://{found_ip}"
+                    self.set_camera_url(found_url)
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    return {'found': True, 'method': 'subnet_sweep', 'url': found_url, 'data': data}
+
+        return {'found': False, 'message': 'No SYNTERRA ESP32-S3 Camera discovered on local network'}
 
     def check_hardware_online(self, force=False):
         """Quick health probe with circuit breaker to avoid hanging on unreachable LAN IPs."""
@@ -44,7 +125,7 @@ class CameraService:
 
         self._last_probe_time = now
         try:
-            resp = requests.get(f"{url}/status", timeout=(0.5, 0.8))
+            resp = requests.get(f"{url}/status", timeout=(0.4, 0.7))
             self._is_hardware_available = (resp.status_code == 200)
             return self._is_hardware_available
         except Exception:

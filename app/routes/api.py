@@ -447,3 +447,116 @@ def camera_capture_and_diagnose():
         'raw': result if success else None
     }), (200 if success else 400)
 
+
+# ============================================================================
+# Dynamic Device Discovery & Network Auto-Configuration
+# ============================================================================
+
+@api_bp.route('/camera/register', methods=['POST'])
+def register_camera():
+    """Receives auto-registration heartbeat from ESP32-S3."""
+    import time
+    data = request.get_json(silent=True) or {}
+    cam_ip = data.get('ip') or request.remote_addr
+    port = data.get('port', 80)
+    device_id = data.get('device_id', 'esp32-s3-cam')
+
+    target_url = f"http://{cam_ip}:{port}"
+    camera_service.set_camera_url(target_url)
+
+    try:
+        socketio.emit('camera_status', {
+            'connected': True,
+            'url': target_url,
+            'device_id': device_id,
+            'method': 'auto_registration'
+        })
+    except Exception:
+        pass
+
+    return jsonify({
+        'status': 'registered',
+        'device_id': device_id,
+        'camera_url': target_url,
+        'server_time': int(time.time())
+    }), 200
+
+
+@api_bp.route('/camera/status', methods=['GET'])
+def camera_status():
+    """Returns current active camera target URL, online status, and mode."""
+    online = camera_service.check_hardware_online(force=False)
+    net_info = camera_service.get_network_info()
+    return jsonify({
+        'camera_url': camera_service.target_cam_url,
+        'hardware_online': online,
+        'mode': 'ESP32-S3 LIVE' if online else 'SYNTHETIC HUD',
+        'host_network': net_info
+    }), 200
+
+
+@api_bp.route('/camera/configure', methods=['POST'])
+def configure_camera():
+    """Manually update or override the camera target URL from UI or CLI."""
+    data = request.get_json(silent=True) or {}
+    cam_url = data.get('camera_url')
+    if not cam_url:
+        return jsonify({'error': 'camera_url is required'}), 400
+
+    camera_service.set_camera_url(cam_url)
+    online = camera_service.check_hardware_online(force=True)
+
+    try:
+        socketio.emit('camera_status', {
+            'connected': online,
+            'url': camera_service.target_cam_url,
+            'method': 'manual_config'
+        })
+    except Exception:
+        pass
+
+    return jsonify({
+        'success': True,
+        'camera_url': camera_service.target_cam_url,
+        'hardware_online': online
+    }), 200
+
+
+@api_bp.route('/camera/discover', methods=['POST'])
+def discover_camera():
+    """Trigger LAN subnet sweep and mDNS discovery for ESP32-S3 camera."""
+    result = camera_service.discover_camera()
+    if result.get('found'):
+        try:
+            socketio.emit('camera_status', {
+                'connected': True,
+                'url': result.get('url'),
+                'method': result.get('method')
+            })
+        except Exception:
+            pass
+        return jsonify({
+            'success': True,
+            'message': f"Discovered ESP32-S3 camera at {result.get('url')} via {result.get('method')}",
+            'discovery': result
+        }), 200
+    else:
+        return jsonify({
+            'success': False,
+            'message': result.get('message', 'Camera not found on local network'),
+            'discovery': result
+        }), 404
+
+
+@api_bp.route('/system/network', methods=['GET'])
+def system_network():
+    """List host IP addresses, gateway interfaces, and mDNS endpoints."""
+    net_info = camera_service.get_network_info()
+    return jsonify({
+        'host_network': net_info,
+        'default_gateway_hint': '192.168.137.1 (Mobile Hotspot)' if any('192.168.137' in ip for ip in net_info.get('ips', [])) else None,
+        'mdns_camera': 'http://synterra-cam.local',
+        'active_camera_url': camera_service.target_cam_url,
+        'active_camera_online': camera_service.check_hardware_online()
+    }), 200
+

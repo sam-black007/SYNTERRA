@@ -25,7 +25,9 @@ import {
   FileText,
   Flame,
   Zap,
-  Gauge
+  Gauge,
+  Wifi,
+  Search
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -82,6 +84,15 @@ export default function App() {
   const [uploadedImagePreview, setUploadedImagePreview] = useState(null);
   const [plantNameInput, setPlantNameInput] = useState('');
   const [latestDiagnosisResult, setLatestDiagnosisResult] = useState(null);
+  const [cameraStatus, setCameraStatus] = useState({
+    camera_url: 'http://synterra-cam.local',
+    hardware_online: false,
+    mode: 'SYNTHETIC HUD',
+    host_network: {}
+  });
+  const [customCamUrl, setCustomCamUrl] = useState('');
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [discoveryMsg, setDiscoveryMsg] = useState('');
   const fileInputRef = useRef(null);
 
   // Initialize Socket.io and data polling
@@ -130,6 +141,17 @@ export default function App() {
 
     socket.on('irrigation_update', (status) => {
       if (status) setIrrigationStatus(status);
+    });
+
+    socket.on('camera_status', (data) => {
+      if (data) {
+        setCameraStatus((prev) => ({
+          ...prev,
+          camera_url: data.url || prev.camera_url,
+          hardware_online: !!data.connected,
+          mode: data.connected ? 'ESP32-S3 LIVE' : 'SYNTHETIC HUD',
+        }));
+      }
     });
 
     fetchInitialData();
@@ -208,6 +230,13 @@ export default function App() {
         const ir = await irrigRes.json();
         if (ir.irrigation) setIrrigationStatus(ir.irrigation);
       }
+
+      fetch('/api/camera/status')
+        .then((r) => r.json())
+        .then((cam) => {
+          if (cam) setCameraStatus(cam);
+        })
+        .catch(() => {});
     } catch (err) {
       console.warn('Initial data load warning:', err);
     }
@@ -256,6 +285,54 @@ export default function App() {
       alert('Camera capture failed: ' + err.message);
     } finally {
       setIsDiagnosing(false);
+    }
+  };
+
+  // Camera Network Discovery & Manual Config
+  const handleAutoDiscoverCamera = async () => {
+    setIsDiscovering(true);
+    setDiscoveryMsg('Sweeping local network & mDNS for ESP32-S3...');
+    try {
+      const res = await fetch('/api/camera/discover', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setDiscoveryMsg(`Discovered ESP32-S3 at ${data.discovery.url} via ${data.discovery.method}!`);
+        setCameraStatus((prev) => ({
+          ...prev,
+          camera_url: data.discovery.url,
+          hardware_online: true,
+          mode: 'ESP32-S3 LIVE'
+        }));
+      } else {
+        setDiscoveryMsg('No active ESP32 camera found on local subnet. Using Synthetic HUD.');
+      }
+    } catch (err) {
+      setDiscoveryMsg('Discovery sweep error: ' + err.message);
+    } finally {
+      setIsDiscovering(false);
+    }
+  };
+
+  const handleConfigureCamera = async () => {
+    if (!customCamUrl.trim()) return;
+    try {
+      const res = await fetch('/api/camera/configure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ camera_url: customCamUrl })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCameraStatus((prev) => ({
+          ...prev,
+          camera_url: data.camera_url,
+          hardware_online: data.hardware_online,
+          mode: data.hardware_online ? 'ESP32-S3 LIVE' : 'SYNTHETIC HUD'
+        }));
+        setDiscoveryMsg(`Camera target updated to ${data.camera_url}`);
+      }
+    } catch (err) {
+      alert('Failed to configure camera: ' + err.message);
     }
   };
 
@@ -722,6 +799,68 @@ export default function App() {
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                       <span>LIVE FEED</span>
                     </div>
+                  </div>
+
+                  {/* Dynamic Network Station & Auto-Discovery Bar */}
+                  <div className="mt-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Wifi className={`w-3.5 h-3.5 ${cameraStatus.hardware_online ? 'text-emerald-400' : 'text-amber-400'}`} />
+                        <span className="font-semibold text-slate-300">Device Link:</span>
+                        <span className="font-mono text-[11px] text-slate-300">{cameraStatus.camera_url || 'http://synterra-cam.local'}</span>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                        cameraStatus.hardware_online
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                      }`}>
+                        {cameraStatus.hardware_online ? 'ESP32-S3 LIVE' : 'SYNTHETIC HUD'}
+                      </span>
+                    </div>
+
+                    {/* Quick Network Help & Host IP info */}
+                    {cameraStatus.host_network?.ips && (
+                      <div className="text-[10px] text-slate-400 flex flex-wrap gap-1.5 items-center">
+                        <span className="text-slate-500">Host IP:</span>
+                        {cameraStatus.host_network.ips.map((ip) => (
+                          <span key={ip} className="px-1.5 py-0.5 rounded bg-slate-800/90 font-mono text-emerald-400 border border-slate-700">
+                            {ip} {ip.startsWith('192.168.137') ? '(Hotspot jj)' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Auto-Discover and Manual Override Row */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={handleAutoDiscoverCamera}
+                        disabled={isDiscovering}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium transition disabled:opacity-50 shrink-0"
+                      >
+                        <Search className={`w-3 h-3 ${isDiscovering ? 'animate-spin' : ''}`} />
+                        <span>{isDiscovering ? 'Scanning Subnet...' : 'Auto-Discover'}</span>
+                      </button>
+
+                      <div className="flex-1 flex items-center gap-1">
+                        <input
+                          type="text"
+                          placeholder="http://192.168.137.X"
+                          value={customCamUrl}
+                          onChange={(e) => setCustomCamUrl(e.target.value)}
+                          className="flex-1 bg-black/40 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200 text-[11px] font-mono focus:outline-none focus:border-emerald-500"
+                        />
+                        <button
+                          onClick={handleConfigureCamera}
+                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium transition border border-slate-700 shrink-0"
+                        >
+                          Bind
+                        </button>
+                      </div>
+                    </div>
+
+                    {discoveryMsg && (
+                      <p className="text-[10px] text-teal-400 font-mono animate-fadeIn">{discoveryMsg}</p>
+                    )}
                   </div>
                 </div>
 

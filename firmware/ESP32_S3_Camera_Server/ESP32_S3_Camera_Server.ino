@@ -29,6 +29,8 @@
 
 #include "esp_camera.h"
 #include <WiFi.h>
+#include <ESPmDNS.h>
+#include <HTTPClient.h>
 #include "esp_timer.h"
 #include "img_converters.h"
 #include "fb_gfx.h"
@@ -47,10 +49,45 @@
 #include "camera_pins.h"
 
 // ==============================================================================
-// 2. WiFi Credentials (Configure for your local network)
+// 2. WiFi Credentials (Configured for Mobile Hotspot / Local Network)
 // ==============================================================================
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
+const char* ssid = "jj";              // Windows Mobile Hotspot SSID
+const char* password = "123456789";   // Hotspot Password
+
+// Fallback host laptop IP if gateway differs
+const char* fallback_server_ip = "192.168.137.10";
+
+unsigned long lastAnnounceTime = 0;
+const unsigned long announceInterval = 30000; // Heartbeat announce every 30s
+
+// Auto-register camera IP with the SYNTERRA host server
+void announceToSynterra() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  IPAddress gateway = WiFi.gatewayIP();
+  String serverHosts[2] = {
+    gateway.toString(),
+    fallback_server_ip
+  };
+
+  for (int i = 0; i < 2; i++) {
+    if (serverHosts[i].length() == 0 || serverHosts[i] == "0.0.0.0") continue;
+    HTTPClient http;
+    String url = "http://" + serverHosts[i] + ":5000/api/camera/register";
+    http.setTimeout(1500);
+    if (http.begin(url)) {
+      http.addHeader("Content-Type", "application/json");
+      String payload = "{\"device_id\":\"esp32-s3-cam\",\"ip\":\"" + WiFi.localIP().toString() + "\",\"port\":80}";
+      int code = http.POST(payload);
+      if (code > 0) {
+        Serial.printf("[AUTO-DISCOVERY] Registered camera with SYNTERRA at %s (HTTP %d)\n", serverHosts[i].c_str(), code);
+        http.end();
+        return;
+      }
+      http.end();
+    }
+  }
+}
 
 // ==============================================================================
 // Server & Stream Setup
@@ -264,9 +301,21 @@ void setup() {
     Serial.println();
     Serial.println(F("[WIFI] CONNECTED SUCCESSFULLY!"));
     Serial.printf("[WIFI] ESP32-S3 Camera IP Address: http://%s\n", WiFi.localIP().toString().c_str());
-    Serial.printf("[WIFI] MJPEG Stream Endpoint:    http://%s/stream\n", WiFi.localIP().toString().c_str());
-    Serial.printf("[WIFI] Still Capture Endpoint:    http://%s/capture\n", WiFi.localIP().toString().c_str());
+    Serial.printf("[WIFI] Gateway IP (Laptop Host):  http://%s\n", WiFi.gatewayIP().toString().c_str());
+    Serial.printf("[WIFI] MJPEG Stream Endpoint:     http://%s/stream\n", WiFi.localIP().toString().c_str());
+    Serial.printf("[WIFI] Still Capture Endpoint:     http://%s/capture\n", WiFi.localIP().toString().c_str());
+
+    // 1. Enable mDNS Responder: access at http://synterra-cam.local without IP
+    if (MDNS.begin("synterra-cam")) {
+      MDNS.addService("http", "tcp", 80);
+      Serial.println(F("[mDNS] Responder active at http://synterra-cam.local"));
+    }
+
+    // 2. Start HTTP Stream Server
     startCameraServer();
+
+    // 3. Auto-register this camera IP with the SYNTERRA host server
+    announceToSynterra();
   } else {
     Serial.println();
     Serial.println(F("[WIFI ERROR] Failed to connect. Check SSID/Password."));
@@ -277,6 +326,10 @@ void setup() {
 // Loop
 // ==============================================================================
 void loop() {
-  // Web server runs asynchronously in background tasks
-  delay(1000);
+  // Periodic heartbeat announce to keep SYNTERRA synchronized
+  if (millis() - lastAnnounceTime > announceInterval) {
+    lastAnnounceTime = millis();
+    announceToSynterra();
+  }
+  delay(100);
 }
