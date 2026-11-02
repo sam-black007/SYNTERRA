@@ -29,6 +29,8 @@
 #include <DHT.h>
 #include <BH1750.h>
 #include <ArduinoJson.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
 
 // ==============================================================================
 // Configuration & Flags
@@ -40,6 +42,15 @@
 
 // Set to true to emit realistic synthetic botanical readings (for bench testing without sensors)
 #define SIMULATION_MODE     false
+
+// ==============================================================================
+// Wireless Wi-Fi Telemetry Configuration (Over Hotspot or LAN)
+// ==============================================================================
+#define ENABLE_WIFI         true
+const char* ssid = "jj";                              // Windows Mobile Hotspot
+const char* password = "123456789";                   // 2.4 GHz Band
+const char* device_token = "plant-lab-auth-token-9981";  // Matched to .env DEVICE_TOKEN
+const char* fallback_server_ip = "192.168.137.10";
 
 // ==============================================================================
 // Pin Definitions
@@ -68,6 +79,34 @@ BH1750 lightMeter;
 
 bool bh1750_available = false;
 unsigned long last_telemetry_time = 0;
+
+// Helper: Post telemetry wirelessly directly to SYNTERRA backend
+void sendTelemetryOverWifi(const String& jsonPayload) {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  IPAddress gateway = WiFi.gatewayIP();
+  String serverHosts[2] = {
+    gateway.toString(),
+    fallback_server_ip
+  };
+
+  for (int i = 0; i < 2; i++) {
+    if (serverHosts[i].length() == 0 || serverHosts[i] == "0.0.0.0") continue;
+    HTTPClient http;
+    String url = "http://" + serverHosts[i] + ":5000/api/sensors/telemetry";
+    http.setTimeout(1500);
+    if (http.begin(url)) {
+      http.addHeader("Content-Type", "application/json");
+      http.addHeader("X-Device-Token", device_token);
+      int code = http.POST(jsonPayload);
+      if (code == 200 || code == 201) {
+        http.end();
+        return;
+      }
+      http.end();
+    }
+  }
+}
 
 // Simulation variables
 float sim_temp = 24.5;
@@ -107,6 +146,27 @@ void setup() {
     analogReadResolution(12);
   } else {
     Serial.println(F("{\"mode\": \"SIMULATION_MODE_ENABLED\"}"));
+  }
+
+  // Wireless Wi-Fi initialization (connect to hotspot or local LAN)
+  if (ENABLE_WIFI) {
+    Serial.printf("[WIFI] Connecting to hotspot %s", ssid);
+    WiFi.begin(ssid, password);
+    int retries = 0;
+    while (WiFi.status() != WL_CONNECTED && retries < 15) {
+      delay(400);
+      Serial.print(F("."));
+      retries++;
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println();
+      Serial.printf("[WIFI] CONNECTED! IP: %s | Gateway: %s\n",
+                    WiFi.localIP().toString().c_str(),
+                    WiFi.gatewayIP().toString().c_str());
+    } else {
+      Serial.println();
+      Serial.println(F("[WIFI] Standalone mode (emitting to USB Serial)."));
+    }
   }
 
   Serial.println(F("{\"system\": \"SYNTERRA ESP32-S3 Client\", \"status\": \"ready\"}"));
@@ -188,8 +248,14 @@ void loop() {
     doc["soil_raw_adc"] = soil_raw_adc;
     doc["water_reservoir_ok"] = water_reservoir_ok;
 
-    serializeJson(doc, Serial);
-    Serial.println(); // Trailing newline delimiter for serial bridge
+    String jsonString;
+    serializeJson(doc, jsonString);
+    Serial.println(jsonString); // Trailing newline delimiter for USB serial bridge
+
+    // Wireless HTTP telemetry directly to SYNTERRA laptop server
+    if (ENABLE_WIFI) {
+      sendTelemetryOverWifi(jsonString);
+    }
   }
 
   // Yield to background ESP32 tasks
