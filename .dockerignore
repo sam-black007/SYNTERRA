@@ -1,0 +1,9 @@
+.git
+.venv
+frontend/node_modules
+instance
+*.pyc
+__pycache__
+*.pdf
+test_leaf.jpg
+synterra_sample_dossier.pdf

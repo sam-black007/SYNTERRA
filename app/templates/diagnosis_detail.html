@@ -34,6 +34,11 @@
     </div>
     {% endif %}
 
-    <a href="{{ url_for('main.index') }}" class="btn" style="margin-top: 1rem; display: inline-block;">Back to Dashboard</a>
+    <div style="margin-top: 1.5rem; display: flex; gap: 1rem; align-items: center;">
+        <a href="/api/diagnosis/{{ diag.id }}/pdf" target="_blank" class="btn" style="background: #0284c7; color: white; text-decoration: none; padding: 0.75rem 1.25rem; border-radius: 0.5rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem;">
+            <span>📄 Export Official PDF Dossier</span>
+        </a>
+        <a href="{{ url_for('main.index') }}" class="btn" style="background: #334155; color: white; text-decoration: none; padding: 0.75rem 1.25rem; border-radius: 0.5rem; font-weight: 600; display: inline-block;">Back to Dashboard</a>
+    </div>
 </div>
 {% endblock %}

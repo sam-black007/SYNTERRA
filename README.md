@@ -27,6 +27,12 @@ copy .env.example .env
 
 On Windows, double-click **`start.bat`** (or run `.\start.ps1` in PowerShell). It automatically checks the virtual environment, starts the server, and opens your browser to the Live Console.
 
+### Or Run with Docker:
+```bash
+docker compose up -d --build
+```
+Open `http://localhost:5000/dashboard`
+
 ```powershell
 # Manual Start:
 git clone https://github.com/sam-black007/SYNTERRA.git
@@ -53,6 +59,7 @@ python run.py
 | `/api/diagnose` | POST | Upload image → real Plant.id diagnosis |
 | `/api/diagnoses` | GET | List all saved diagnoses |
 | `/api/diagnosis/<id>` | GET | Get single diagnosis as JSON |
+| `/api/diagnosis/<id>/pdf` | GET | **Download Official PDF Pathology Dossier with Treatment Advisory** |
 | `/api/sensors/telemetry` | POST | Ingest ESP32 telemetry (`X-Device-Token` auth) |
 | `/api/sensors/latest` | GET | Get most recent sensor reading |
 | `/api/sensors/history` | GET | Get historical sensor readings (`?limit=50`) |

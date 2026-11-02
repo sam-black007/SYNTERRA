@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  synterra:
+    build: .
+    container_name: synterra_platform
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=5000
+    env_file:
+      - .env
+    volumes:
+      - ./instance:/app/instance

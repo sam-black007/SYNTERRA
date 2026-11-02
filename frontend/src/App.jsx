@@ -807,11 +807,22 @@ export default function App() {
                       <p className="text-xs text-slate-400">Record #{latestDiagnosisResult.id} &bull; Processed via Kindwise crop.health model</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-black text-emerald-400">
-                      {latestDiagnosisResult.confidence ? `${latestDiagnosisResult.confidence.toFixed(1)}%` : '--'}
-                    </span>
-                    <span className="text-xs text-slate-400 font-medium">Confidence</span>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <span className="text-2xl font-black text-emerald-400">
+                        {latestDiagnosisResult.confidence ? `${latestDiagnosisResult.confidence.toFixed(1)}%` : '--'}
+                      </span>
+                      <span className="text-xs text-slate-400 font-medium block">Confidence</span>
+                    </div>
+                    <a
+                      href={`/api/diagnosis/${latestDiagnosisResult.id}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-950 transition active:scale-95"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Export PDF</span>
+                    </a>
                   </div>
                 </div>
 
@@ -1019,13 +1030,25 @@ export default function App() {
                             {d.created_at ? new Date(d.created_at).toLocaleString() : 'N/A'}
                           </td>
                           <td className="py-3 px-3">
-                            <a
-                              href={`/diagnosis/${d.id}`}
-                              className="text-emerald-400 hover:underline flex items-center gap-1"
-                            >
-                              <span>Dossier</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={`/diagnosis/${d.id}`}
+                                className="text-emerald-400 hover:underline flex items-center gap-1"
+                              >
+                                <span>HTML</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                              <a
+                                href={`/api/diagnosis/${d.id}/pdf`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-2 py-0.5 rounded bg-blue-950/40 text-blue-400 border border-blue-800/40 hover:bg-blue-900/50 flex items-center gap-1"
+                                title="Download Official PDF Dossier"
+                              >
+                                <span>PDF</span>
+                                <Download className="w-3 h-3" />
+                              </a>
+                            </div>
                           </td>
                         </tr>
                       ))

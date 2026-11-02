@@ -123,6 +123,23 @@ def get_diagnosis(diag_id):
     return jsonify(diag.to_dict()), 200
 
 
+@api_bp.route('/diagnosis/<int:diag_id>/pdf', methods=['GET'])
+def get_diagnosis_pdf(diag_id):
+    """Generate and return official PDF pathology dossier."""
+    diag = Diagnosis.query.get_or_404(diag_id)
+    latest_telem = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+    telem_dict = latest_telem.to_dict() if latest_telem else None
+
+    from app.services.pdf_generator import generate_diagnosis_pdf
+    pdf_bytes = generate_diagnosis_pdf(diag, telem_dict)
+
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=synterra_dossier_{diag_id}.pdf"}
+    )
+
+
 # ============================================================================
 # ESP32 Sensor Telemetry Endpoints
 # ============================================================================

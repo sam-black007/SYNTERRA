@@ -39,6 +39,9 @@
   - Served directly from Flask at `http://localhost:5000/dashboard`
 
 ## Phase 4: Production Deployment & Verification Infrastructure (Completed & Verified)
+- [x] Official PDF Pathology Dossier Exporter (`/api/diagnosis/<id>/pdf`) via ReportLab
+- [x] Expert Agronomic Curative & Biological Treatment Advisory Engine (`app/services/pdf_generator.py`)
+- [x] Multi-stage Docker Containerization (`Dockerfile`, `docker-compose.yml`, `.dockerignore`)
 - [x] Automated full-stack monitoring script (`scripts/monitor_test.py`)
 - [x] Real image live test suite (`scripts/test_live_image.py`)
 - [x] Socket.IO real-time event test (`scripts/test_socketio.py`)
@@ -51,4 +54,4 @@
 **Local Path:** `D:\ml challenge\SYNTERRA`  
 **API Key:** Stored locally in `.env` (gitignored, 56 credits remaining)  
 **API Endpoint:** `https://crop.kindwise.com/api/v1`  
-**Latest Verification:** 2026-11-02 11:04 — All Systems Green (Telemetry + Camera + Irrigation + AI Studio)  
+**Latest Verification:** 2026-11-02 11:12 — All Systems Green (PDF Dossiers + Docker + Web Console)  
