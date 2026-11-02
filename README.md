@@ -23,11 +23,20 @@ pip install -r requirements.txt
 copy .env.example .env
 # Edit .env and configure your PLANT_API_KEY and DEVICE_TOKEN
 
-# Run the Flask backend
+## Quick Start (One-Click)
+
+On Windows, double-click **`start.bat`** (or run `.\start.ps1` in PowerShell). It automatically checks the virtual environment, starts the server, and opens your browser to the Live Console.
+
+```powershell
+# Manual Start:
+git clone https://github.com/sam-black007/SYNTERRA.git
+cd SYNTERRA
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env
 python run.py
 ```
-
-Open `http://localhost:5000`
 
 ## Endpoints
 
@@ -47,6 +56,13 @@ Open `http://localhost:5000`
 | `/api/sensors/telemetry` | POST | Ingest ESP32 telemetry (`X-Device-Token` auth) |
 | `/api/sensors/latest` | GET | Get most recent sensor reading |
 | `/api/sensors/history` | GET | Get historical sensor readings (`?limit=50`) |
+| `/api/sensors/export/csv` | GET | Download complete telemetry history as CSV |
+| `/api/camera/stream` | GET | Live MJPEG optical stream with HUD overlay |
+| `/api/camera/capture` | POST | Snap camera frame & run Kindwise AI diagnosis |
+| `/api/irrigation/status` | GET | Live pump state, countdown & safety watchdog |
+| `/api/irrigation/manual` | POST | Execute manual irrigation (5s–30s) |
+| `/api/irrigation/emergency_stop` | POST | Instant safety emergency cutoff |
+| `/api/irrigation/auto_config` | POST | Configure autonomous soil threshold rules |
 
 ## Real-Time React Dashboard
 

@@ -1,8 +1,13 @@
-from flask import Blueprint, jsonify, request, current_app
+import io
+import csv
+import base64
+from flask import Blueprint, jsonify, request, current_app, Response
 from app import db, socketio
 from app.models.diagnosis import Diagnosis
 from app.models.sensor import SensorReading
 from app.services.plantid_client import PlantIdClient
+from app.services.irrigation_controller import irrigation_manager
+from app.services.camera_service import camera_service
 
 api_bp = Blueprint('api', __name__)
 
@@ -172,8 +177,14 @@ def receive_telemetry():
     db.session.add(reading)
     db.session.commit()
 
+    # Autonomous Irrigation Rule Engine: Auto-trigger pump if soil is below threshold
+    if irrigation_manager.auto_mode_enabled and reading.soil_moisture_pct is not None:
+        if reading.soil_moisture_pct < irrigation_manager.soil_threshold_pct:
+            irrigation_manager.start_manual_irrigation(12, reservoir_ok=reading.water_reservoir_ok)
+
     try:
         socketio.emit('telemetry_update', reading.to_dict())
+        socketio.emit('irrigation_update', irrigation_manager.get_status())
     except Exception as e:
         current_app.logger.warning(f"SocketIO telemetry emit warning: {e}")
 
@@ -218,3 +229,186 @@ def get_sensor_history():
         'count': len(readings),
         'readings': [r.to_dict() for r in readings],
     }), 200
+
+
+@api_bp.route('/sensors/export/csv', methods=['GET'])
+def export_sensor_csv():
+    """Export all telemetry readings as CSV."""
+    readings = SensorReading.query.order_by(SensorReading.timestamp.asc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'ID', 'Timestamp (UTC)', 'Device ID', 'Plant ID',
+        'Temperature (C)', 'Humidity (%)', 'Light (Lux)',
+        'Soil Moisture (%)', 'Soil Raw ADC', 'Reservoir OK'
+    ])
+
+    for r in readings:
+        writer.writerow([
+            r.id,
+            r.timestamp.isoformat() if r.timestamp else '',
+            r.device_id,
+            r.plant_id or '',
+            r.temperature_c if r.temperature_c is not None else '',
+            r.humidity_pct if r.humidity_pct is not None else '',
+            r.light_lux if r.light_lux is not None else '',
+            r.soil_moisture_pct if r.soil_moisture_pct is not None else '',
+            r.soil_raw_adc if r.soil_raw_adc is not None else '',
+            'TRUE' if r.water_reservoir_ok else 'FALSE'
+        ])
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=synterra_telemetry_export.csv"}
+    )
+
+
+# ============================================================================
+# Autonomous Irrigation Control Endpoints
+# ============================================================================
+
+@api_bp.route('/irrigation/status', methods=['GET'])
+def get_irrigation_status():
+    """Retrieve live pump watchdog status."""
+    return jsonify({'success': True, 'irrigation': irrigation_manager.get_status()}), 200
+
+
+@api_bp.route('/irrigation/manual', methods=['POST'])
+def trigger_manual_irrigation():
+    """Trigger manual drip irrigation cycle with safety watchdog."""
+    data = request.get_json(silent=True) or {}
+    duration = int(data.get('duration_sec', 10))
+
+    # Read latest reservoir status from latest sensor telemetry
+    latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+    reservoir_ok = latest.water_reservoir_ok if latest else True
+
+    success, message = irrigation_manager.start_manual_irrigation(duration, reservoir_ok=reservoir_ok)
+
+    # Broadcast irrigation status
+    try:
+        socketio.emit('irrigation_update', irrigation_manager.get_status())
+    except Exception:
+        pass
+
+    return jsonify({
+        'success': success,
+        'message': message,
+        'irrigation': irrigation_manager.get_status()
+    }), (200 if success else 400)
+
+
+@api_bp.route('/irrigation/emergency_stop', methods=['POST'])
+def emergency_stop_irrigation():
+    """Emergency cut-off to disengage pump relays immediately."""
+    success, message = irrigation_manager.emergency_stop()
+    try:
+        socketio.emit('irrigation_update', irrigation_manager.get_status())
+    except Exception:
+        pass
+    return jsonify({'success': success, 'message': message, 'irrigation': irrigation_manager.get_status()}), 200
+
+
+@api_bp.route('/irrigation/reset_stop', methods=['POST'])
+def reset_emergency_stop():
+    """Clear emergency stop condition."""
+    success, message = irrigation_manager.reset_emergency_stop()
+    try:
+        socketio.emit('irrigation_update', irrigation_manager.get_status())
+    except Exception:
+        pass
+    return jsonify({'success': success, 'message': message, 'irrigation': irrigation_manager.get_status()}), 200
+
+
+@api_bp.route('/irrigation/auto_config', methods=['POST'])
+def configure_auto_irrigation():
+    """Toggle automated soil-threshold irrigation rules."""
+    data = request.get_json(silent=True) or {}
+    enabled = data.get('enabled', False)
+    threshold = data.get('soil_threshold_pct')
+
+    success, message = irrigation_manager.toggle_auto_mode(enabled, threshold)
+    try:
+        socketio.emit('irrigation_update', irrigation_manager.get_status())
+    except Exception:
+        pass
+    return jsonify({'success': success, 'message': message, 'irrigation': irrigation_manager.get_status()}), 200
+
+
+# ============================================================================
+# Camera Streaming & One-Click Live Diagnosis
+# ============================================================================
+
+@api_bp.route('/camera/stream')
+def camera_stream():
+    """Proxy live MJPEG video stream with telemetry HUD overlay."""
+    def _get_latest_telem():
+        latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+        return latest.to_dict() if latest else None
+
+    return Response(
+        camera_service.mjpeg_generator(_get_latest_telem),
+        mimetype='multipart/x-mixed-replace; boundary=frame'
+    )
+
+
+@api_bp.route('/camera/capture', methods=['POST'])
+def camera_capture_and_diagnose():
+    """Snap live camera frame and pipe directly into Kindwise AI pathology."""
+    latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+    telem = latest.to_dict() if latest else None
+
+    # Capture frame bytes
+    frame_bytes = camera_service.capture_frame(telem)
+
+    # Execute Kindwise pathology
+    client = PlantIdClient()
+    success, result = client.identify(frame_bytes, filename='camera_snap.jpg')
+
+    disease_name = None
+    confidence = None
+    crop_name = None
+    if success:
+        result_data = result.get('result', {})
+        crops = result_data.get('crop', {}).get('suggestions', [])
+        if crops:
+            crop_name = crops[0].get('name')
+        diseases = result_data.get('disease', {}).get('suggestions', [])
+        if diseases:
+            disease_name = diseases[0].get('name')
+            confidence = diseases[0].get('probability', 0) * 100
+
+        diag = Diagnosis(
+            plant_name=crop_name or 'Camera Specimen',
+            disease_name=disease_name or 'Healthy / No Disease Detected',
+            confidence=confidence,
+            image_url='camera_live_capture.jpg',
+            raw_response=str(result)[:5000]
+        )
+        db.session.add(diag)
+        db.session.commit()
+
+        try:
+            socketio.emit('diagnosis_update', diag.to_dict())
+        except Exception:
+            pass
+
+        diag_dict = diag.to_dict()
+    else:
+        diag_dict = None
+
+    thumbnail_b64 = base64.b64encode(frame_bytes).decode('utf-8')
+
+    return jsonify({
+        'success': success,
+        'message': 'Camera frame analyzed successfully' if success else 'Diagnosis failed',
+        'diagnosis': diag_dict,
+        'thumbnail_b64': f"data:image/jpeg;base64,{thumbnail_b64}",
+        'crop_name': crop_name,
+        'disease_name': disease_name,
+        'confidence': confidence,
+        'raw': result if success else None
+    }), (200 if success else 400)
+
