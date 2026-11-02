@@ -158,8 +158,12 @@ class ChatbotService:
         user_msg = message.strip()
         ctx = self.get_context_snapshot()
 
-        # Check if Gemini API is available
-        gemini_api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or self.gemini_key
+        # Check if Gemini API is available (from .env or environment)
+        gemini_api_key = (
+            os.environ.get('GEMINI_API_KEY')
+            or os.environ.get('GOOGLE_API_KEY')
+            or self.gemini_key
+        )
         if gemini_api_key:
             try:
                 gemini_reply = self._query_gemini(user_msg, ctx, conversation_history, gemini_api_key)
@@ -189,11 +193,11 @@ class ChatbotService:
         import requests
 
         system_instruction = (
-            "You are SYNTERRA's AI Senior Agronomist and Botanical Pathology Copilot. "
+            "You are SYNTERRA's AI Senior Agronomist and Botanical Pathology Copilot (TerraAI). "
             "You provide authoritative, scientifically rigorous, and highly actionable agricultural advice. "
             "Always include practical treatment recommendations, dosage rates, application timing, withholding periods (PHI), "
-            "and environmental adjustments. Format your answers with clean markdown headings, bullet points, and bold text. "
-            "Reference the user's real-time canopy telemetry, latest pathology diagnosis, and 5-day weather forecast directly when relevant."
+            "and environmental adjustments. Format your answers with clean markdown headings (###), bullet points, and bold text. "
+            "Directly reference the user's real-time canopy telemetry, latest pathology diagnosis, and 5-day weather forecast."
         )
 
         context_prompt = (
@@ -212,28 +216,35 @@ class ChatbotService:
             f"USER QUERY: {message}"
         )
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-        payload = {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": f"{system_instruction}\n\n{context_prompt}"}]
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.4,
-                "maxOutputTokens": 1024
-            }
-        }
+        candidate_models = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-latest']
 
-        resp = requests.post(url, json=payload, timeout=8)
-        if resp.status_code == 200:
-            data = resp.json()
-            candidates = data.get('candidates', [])
-            if candidates:
-                parts = candidates[0].get('content', {}).get('parts', [])
-                if parts:
-                    return parts[0].get('text', '')
+        for model in candidate_models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": f"{system_instruction}\n\n{context_prompt}"}]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.35,
+                    "maxOutputTokens": 1024
+                }
+            }
+
+            try:
+                resp = requests.post(url, json=payload, timeout=9)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidates = data.get('candidates', [])
+                    if candidates:
+                        parts = candidates[0].get('content', {}).get('parts', [])
+                        if parts:
+                            return parts[0].get('text', '')
+            except Exception as e:
+                logger.warning(f"Error querying Gemini model {model}: {e}")
+
         return None
 
     def _botanical_expert_engine(self, query, ctx):
