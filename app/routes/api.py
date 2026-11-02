@@ -581,6 +581,40 @@ def refresh_weather_forecast():
     return jsonify(forecast_data), 200
 
 
+@api_bp.route('/weather/compare', methods=['GET', 'POST'])
+def compare_sensor_weather():
+    """Compare real on-site hardware sensor readings against external meteorological ground-truth."""
+    sensor_temp = None
+    sensor_hum = None
+    device_id = None
+
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        sensor_temp = data.get('temperature_c')
+        sensor_hum = data.get('humidity_pct')
+        device_id = data.get('device_id')
+    else:
+        t_arg = request.args.get('temp')
+        h_arg = request.args.get('hum')
+        if t_arg is not None:
+            try:
+                sensor_temp = float(t_arg)
+            except ValueError:
+                pass
+        if h_arg is not None:
+            try:
+                sensor_hum = float(h_arg)
+            except ValueError:
+                pass
+
+    comparison = weather_service.compare_sensor_to_weather(
+        sensor_temp=sensor_temp,
+        sensor_humidity=sensor_hum,
+        device_id=device_id
+    )
+    return jsonify(comparison), 200
+
+
 # ============================================================================
 # AI Agronomist & Botanical Copilot Chatbot
 # ============================================================================

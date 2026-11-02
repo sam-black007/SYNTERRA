@@ -143,6 +143,7 @@ class ChatbotService:
 
         # Microclimate / VPD
         suggestions.append("Analyze current canopy VPD and transpiration rate.")
+        suggestions.append("How accurate is my sensor compared to official weather?")
 
         return suggestions[:4]
 
@@ -313,6 +314,23 @@ class ChatbotService:
         # ====================================================================
         # INTENT 3: Weather, Fungal Risk, Spore Incubation
         # ====================================================================
+        if any(kw in q for kw in ['accuracy', 'accurate', 'compare sensor', 'ground truth', 'calibration', 'benchmark', 'sensor vs weather']):
+            comp = weather_service.compare_sensor_to_weather(sensor_temp=temp, sensor_humidity=rh)
+            c = comp.get('comparison', {})
+            ws = comp.get('weather_station', {})
+            insights_str = "\n".join(f"- {ins}" for ins in c.get('insights', []))
+            return (
+                f"### 📡 Hardware Sensor vs. Meteorological Ground-Truth Benchmark\n\n"
+                f"- **Sensor Hardware Reading:** `{temp}°C` | `{rh}% RH`\n"
+                f"- **{ws.get('provider')}:** `{ws.get('temperature_c')}°C` | `{ws.get('humidity_pct')}% RH` ({ws.get('location')})\n\n"
+                f"#### Calibration & Accuracy Analysis:\n"
+                f"- **Overall Hardware Fidelity Score:** `{c.get('composite_accuracy_pct')}%` — **{c.get('calibration_status')}**\n"
+                f"- **Temperature Deviation:** `Δ {c.get('temp_delta_c'):+0.1f}°C` (Accuracy: {c.get('temp_accuracy_pct')}%)\n"
+                f"- **Relative Humidity Deviation:** `Δ {c.get('humidity_delta_pct'):+0.1f}%` (Accuracy: {c.get('humidity_accuracy_pct')}%)\n\n"
+                f"#### Agronomic Ground-Truth Insights:\n"
+                f"{insights_str}"
+            )
+
         if any(kw in q for kw in ['weather', 'risk', 'fungal', 'spore', 'blight risk', 'forecast', 'alert', 'pathogen']):
             return (
                 f"### 🌦️ Agro-Meteorological Disease Vector Analysis\n\n"
