@@ -168,12 +168,12 @@ export default function App() {
 
     fetchInitialData();
 
-    // Fallback heartbeat polling every 5s in case of connection drop
+    // Fallback heartbeat polling every 3s in case of connection drop
     const heartbeat = setInterval(() => {
       fetch('/api/sensors/latest')
         .then((r) => r.json())
         .then((data) => {
-          if (data.reading && (!latestTelemetry || data.reading.id !== latestTelemetry.id)) {
+          if (data.reading) {
             setLatestTelemetry(data.reading);
             setLastPacketTime(new Date(data.reading.timestamp));
           }
