@@ -352,6 +352,10 @@ $$\text{DLI} = \sum_{i} \left( \text{PPFD}_i \times \Delta t_i \right) \times 10
 
 ### 4. Closed-Loop Autonomous Irrigation Policy
 
+<p align="center">
+  <img src="docs/images/irrigation_watchdog_live.png" alt="SYNTERRA Precision Drip Irrigation Watchdog" width="90%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);" />
+</p>
+
 1. Telemetry packet arrives every 6s.
 2. If `auto_mode_enabled` is active, compares current `soil_moisture_pct` against `irrigation_manager.soil_threshold_pct`.
 3. If moisture is below threshold, checks `water_reservoir_ok`.
@@ -362,6 +366,10 @@ $$\text{DLI} = \sum_{i} \left( \text{PPFD}_i \times \Delta t_i \right) \times 10
 ---
 
 ### 5. Dual-Engine AI Computer Vision Leaf Pathology
+
+<p align="center">
+  <img src="docs/images/pathology_studio_live.png" alt="SYNTERRA Dual-Engine AI Pathology Studio" width="90%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);" />
+</p>
 
 SYNTERRA features an enterprise dual-inference architecture allowing users to dynamically select between deep botanical models and state-of-the-art multimodal vision foundation models:
 
@@ -380,9 +388,9 @@ SYNTERRA features an enterprise dual-inference architecture allowing users to dy
 SYNTERRA integrates georeferenced pedological data from the **ISRIC SoilGrids World Soil Information REST API**, mapped through the official **USDA Soil Texture Triangle**:
 
 * **Mathematical Texture Classification:** Determines soil classification (*Sandy Loam*, *Clay Loam*, *Silt Loam*, etc.) using fractional ternary boundaries:
-  $$	ext{Sand \%} + 	ext{Silt \%} + 	ext{Clay \%} = 100\%$$
+  $$\text{Sand \%} + \text{Silt \%} + \text{Clay \%} = 100\%$$
 * **Pedological Substrate Parameters:**
-  * Native Substrate pH in Water ($pH_{	ext{H}_2	ext{O}}$) & category rating (*Slightly Acidic / Optimal Bioavailability*).
+  * Native Substrate pH in Water ($pH_{\text{H}_2\text{O}}$) & category rating (*Slightly Acidic / Optimal Bioavailability*).
   * Bulk density ($g/cm^3$) indicating rhizosphere compaction and aeration.
   * Natural drainage capacity and customized substrate watering strategies (*deeper, spaced irrigation pulses vs. frequent shallow wetting*).
 * **Automatic Regional Fallback:** Smooth fallback to regional pedological models ensures zero-downtime operation even during SoilGrids server maintenance.
@@ -587,8 +595,11 @@ SYNTERRA/
 │       └── plantid_client.py       # Kindwise Crop.Health / Plant.id API client
 ├── docs/
 │   └── images/
-│       ├── dashboard_live.png      # Real-time console preview screenshot
-│       └── esp32_hardware_setup.jpg# Physical ESP32 board arrangement photo
+│       ├── dashboard_live.png          # High-resolution real-time console preview
+│       ├── dashboard_full_overview.png # Comprehensive full-page overview console
+│       ├── pathology_studio_live.png   # Dual-Engine AI Pathology Studio preview
+│       ├── irrigation_watchdog_live.png# Autonomous Irrigation Watchdog preview
+│       └── esp32_hardware_setup.jpg    # Physical ESP32 board arrangement photo
 ├── firmware/
 │   └── Sensor_Hardware_Diagnostic/
 │       └── Sensor_Hardware_Diagnostic.ino # Production SensorManager ESP32 firmware (6s cadence)
