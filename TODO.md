@@ -3,10 +3,9 @@
 ## Phase 1: Core Backend (Done)
 - [x] Initialize GitHub repo `sam-black007/SYNTERRA`
 - [x] Flask app factory with SQLAlchemy + CSRF
-- [x] Plant.id API v3 client (`plantid_client.py`) — identify + test connection
-- [x] Correct endpoint: `https://plant.id/api/v3` (was returning 404 on crop.kindwise.com)
-- [x] Base64 JSON request format for Plant.id v3 identify endpoint
-- [x] Response parsing: classifications nested under `result.classifications`
+- [x] Plant.id / crop.health API v1 client (`plantid_client.py`)
+- [x] Correct endpoint: `https://crop.kindwise.com/api/v1` (from your API key dashboard)
+- [x] Async two-step flow: POST `/identification` → GET `/identification/{token}`
 - [x] Diagnosis model (SQLite)
 - [x] REST API endpoints (`/api/diagnose`, `/api/diagnoses`, `/api/plantid/*`)
 - [x] CSRF exemption for API blueprint
@@ -14,15 +13,15 @@
 - [x] Web routes (`/`, `/pathology`, `/diagnosis/<id>`, `/integrations`)
 - [x] Base HTML template + all page templates
 - [x] `.env.example` with `PLANT_API_KEY` placeholder
-- [x] `requirements.txt` (Flask, SQLAlchemy, python-dotenv, requests)
+- [x] `requirements.txt` (Flask, SQLAlchemy, python-dotenv, requests, Pillow)
 
 ## Phase 2: Local Testing (Done)
 - [x] Install dependencies
 - [x] Configure `.env` with real Plant.id key (not committed to GitHub)
 - [x] Verify app starts (`/api/health` returns 200)
-- [x] Verify Plant.id connection test works (64 credits remaining)
+- [x] Verify Plant.id connection test works (200, key valid)
 - [x] Verify CSRF fix — API endpoints work, web forms protected
-- [x] Verify Plant.id v3 endpoint returns 200 (404 error resolved)
+- [x] Verify full identify flow works (submit → poll → result)
 
 ## Phase 3: Repo Updates (Done)
 - [x] Commit all local changes
@@ -40,4 +39,5 @@
 **Repo:** https://github.com/sam-black007/SYNTERRA
 **Local path:** `D:\ml challenge\SYNTERRA`
 **API Key:** Configured locally in `.env` (gitignored, 64 credits remaining)
-**Issue resolved:** Plant.id API 404 → now using correct `https://plant.id/api/v3` endpoint
+**API URL:** `https://crop.kindwise.com/api/v1` (from your dashboard)
+**Issue resolved:** crop.health v1 async identify flow working correctly
