@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card">
+    <h2>Plant Pathology &mdash; AI Disease Detection</h2>
+    <p class="muted">Upload a leaf image for real-time disease identification powered by Plant.id.</p>
+
+    <form method="POST" enctype="multipart/form-data">
+        <div class="form-group">
+            <label>Plant Name (optional)</label>
+            <input type="text" name="plant_name" placeholder="e.g. Tomato, Pepper, Potato">
+        </div>
+        <div class="form-group">
+            <label>Leaf Image <span class="muted">(JPG, PNG, max 16MB)</span></label>
+            <input type="file" name="image" accept="image/*" required>
+        </div>
+        <button type="submit" class="btn">Analyze Image</button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card">
+    <h2>AI Integrations &mdash; Plant.id API</h2>
+    <p class="muted">Configure your Plant.id API key for real plant disease detection.</p>
+
+    <div class="result-card">
+        <h3>Configuration Status</h3>
+        <span class="badge {{ 'badge-ok' if is_configured else 'badge-bad' }}">
+            {{ 'CONFIGURED' if is_configured else 'NOT CONFIGURED' }}
+        </span>
+        <p class="muted">API Key: {{ masked_key }}</p>
+    </div>
+
+    {% if status %}
+    <div class="result-card" style="margin-top: 1rem;">
+        <h3>Connection Test</h3>
+        <span class="badge {{ 'badge-ok' if status.success else 'badge-bad' }}">
+            {{ 'OK' if status.success else 'FAILED' }}
+        </span>
+        <p class="muted">{{ status.message }}</p>
+        {% if status.usage %}
+        <p class="muted">Usage info available from Plant.id API.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if not is_configured %}
+    <div class="alert alert-info" style="margin-top: 1rem;">
+        <strong>Setup:</strong>
+        <ol class="muted" style="margin-left: 1.5rem; margin-top: 0.5rem;">
+            <li>Sign up at <a href="https://plant.id" target="_blank" style="color: #22c55e;">plant.id</a> or <a href="https://kindwise.com" target="_blank" style="color: #22c55e;">kindwise.com</a></li>
+            <li>Create an API key in your dashboard</li>
+            <li>Create a <code>.env</code> file in the project root with: <code>PLANT_API_KEY=your_key_here</code></li>
+            <li>Restart the Flask server</li>
+        </ol>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card">
+    <h2>Diagnosis Result</h2>
+    <p class="muted">Diagnosis #{{ diag.id }} &bull; {{ diag.created_at[:16] if diag.created_at else 'N/A' }}</p>
+
+    <div class="result-grid">
+        <div class="result-card">
+            <h3>Plant</h3>
+            <p>{{ diag.plant_name }}</p>
+        </div>
+        <div class="result-card">
+            <h3>Disease</h3>
+            <p style="font-size: 1.25rem; font-weight: 600;">{{ diag.disease_name or 'Not identified' }}</p>
+        </div>
+        <div class="result-card">
+            <h3>Confidence</h3>
+            <div class="confidence">{{ '%.1f%%' % diag.confidence if diag.confidence else 'N/A' }}</div>
+        </div>
+    </div>
+
+    {% if diag.image_url %}
+    <div class="result-card" style="margin-top: 1rem;">
+        <h3>Image</h3>
+        <p class="muted">{{ diag.image_url }}</p>
+    </div>
+    {% endif %}
+
+    {% if diag.raw_response %}
+    <div class="card" style="margin-top: 1.5rem;">
+        <h3>Raw API Response</h3>
+        <div class="raw-json">{{ diag.raw_response }}</div>
+    </div>
+    {% endif %}
+
+    <a href="{{ url_for('main.index') }}" class="btn" style="margin-top: 1rem; display: inline-block;">Back to Dashboard</a>
+</div>
+{% endblock %}

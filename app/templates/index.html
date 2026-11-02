@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card">
+    <h2>Dashboard</h2>
+    <div class="result-grid">
+        <div class="result-card">
+            <h3>API Status</h3>
+            <span class="badge {{ 'badge-ok' if is_configured else 'badge-bad' }}">
+                {{ 'CONFIGURED' if is_configured else 'NOT CONFIGURED' }}
+            </span>
+            <p class="muted">Plant.id API Key: {{ masked_key }}</p>
+        </div>
+        <div class="result-card">
+            <h3>Total Diagnoses</h3>
+            <div class="confidence">{{ recent|length }}</div>
+            <p class="muted">Plant disease detections recorded</p>
+        </div>
+    </div>
+</div>
+
+{% if recent %}
+<div class="card">
+    <h2>Recent Diagnoses</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Plant</th>
+                <th>Disease</th>
+                <th>Confidence</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in recent %}
+            <tr>
+                <td>{{ d.plant_name }}</td>
+                <td>{{ d.disease_name or 'Unknown' }}</td>
+                <td>{{ '%.1f%%' % d.confidence if d.confidence else 'N/A' }}</td>
+                <td>{{ d.created_at[:16] if d.created_at else 'N/A' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>Quick Start</h2>
+    <ol class="muted" style="margin-left: 1.5rem;">
+        <li>Get a free API key at <a href="https://plant.id" target="_blank" style="color: #22c55e;">plant.id</a></li>
+        <li>Add it to <code>.env</code> as <code>PLANT_API_KEY</code></li>
+        <li>Go to <strong>Integrations</strong> to test the connection</li>
+        <li>Upload a leaf image in <strong>Pathology</strong> for real disease detection</li>
+    </ol>
+</div>
+{% endblock %}
