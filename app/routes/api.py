@@ -53,24 +53,38 @@ def diagnose():
     if not success:
         return jsonify({'success': False, 'error': result.get('error', 'UNKNOWN'), 'message': result.get('message', 'Diagnosis failed')}), 400
 
-    # Parse crop.health v1 response (disease suggestions under result.disease.suggestions)
+    # Parse crop.health v1 response (crop & disease suggestions)
     disease_name = None
     confidence = None
+    crop_name = None
     try:
         result_data = result.get('result', {})
+
+        # 1. Identify crop species if detected
+        crop_suggestions = result_data.get('crop', {}).get('suggestions', [])
+        if crop_suggestions:
+            crop_name = crop_suggestions[0].get('name')
+
+        # 2. Identify disease / pathology if detected
         disease = result_data.get('disease', {})
         suggestions = disease.get('suggestions', [])
         if suggestions:
             top = suggestions[0]
             disease_name = top.get('name')
             confidence = top.get('probability', 0) * 100
-    except Exception:
-        pass
+    except Exception as e:
+        current_app.logger.error(f"Error parsing diagnosis: {e}")
+
+    plant_name = request.form.get('plant_name')
+    if (not plant_name or plant_name in ('Unknown', 'Unknown plant', '')) and crop_name:
+        plant_name = crop_name
+    elif not plant_name:
+        plant_name = 'Unknown'
 
     # Save
     diag = Diagnosis(
-        plant_name=request.form.get('plant_name', 'Unknown'),
-        disease_name=disease_name,
+        plant_name=plant_name,
+        disease_name=disease_name or 'Healthy / No Disease Detected',
         confidence=confidence,
         image_url=file.filename or 'uploaded.jpg',
         raw_response=str(result)[:5000],
