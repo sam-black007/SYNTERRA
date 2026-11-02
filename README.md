@@ -101,7 +101,18 @@ Located at `firmware/ESP32_S3_Camera_Server/ESP32_S3_Camera_Server.ino` & `camer
   - PSRAM: *OPI PSRAM* (or *QSPI PSRAM* for Xiao Sense) &mdash; **MUST BE ENABLED!**
   - Partition Scheme: *Huge APP (3MB No OTA)*
 
-### 3. Serial Bridge
+### 3. ESP32-S3 All-in-One Unified Station (Single Board Mode)
+Located at `firmware/ESP32_S3_Unified_Station/ESP32_S3_Unified_Station.ino` & `camera_pins.h`:
+- **The Ultimate Single-Code Solution**: Runs BOTH the live optical video stream (`/stream`), high-resolution leaf capture (`/capture`), and the environmental sensor readings (DHT11, light, soil moisture, water level) simultaneously on one ESP32-S3 board!
+- **Zero-Conflict Pin Routing**:
+  - DHT11: GPIO 42 (or GPIO 1 on Xiao Sense)
+  - FC-28 Soil Moisture: GPIO 1 (ADC1_CH0)
+  - Water Level Switch: GPIO 41
+  - BH1750 Light: I2C (SDA GPIO 21, SCL GPIO 47)
+- **Pre-Configured Wi-Fi**: Mobile Hotspot `jj` / `123456789`.
+- **Auto-Discovery**: Resolves at `http://synterra-cam.local` and auto-registers with the laptop server gateway.
+
+### 4. Serial Bridge
 Run the Python serial bridge to forward ESP32 USB telemetry directly into the Flask API:
 ```powershell
 # Auto-detects connected ESP32 COM port and forwards telemetry
