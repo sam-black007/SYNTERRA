@@ -52,11 +52,12 @@ def diagnose():
     if not success:
         return jsonify({'success': False, 'error': result.get('error', 'UNKNOWN'), 'message': result.get('message', 'Diagnosis failed')}), 400
 
-    # Parse result
+    # Parse Plant.id v3 response (classifications nested under result)
     disease_name = None
     confidence = None
     try:
-        classifications = result.get('classifications', [])
+        result_data = result.get('result', {})
+        classifications = result_data.get('classifications', [])
         if classifications:
             top = classifications[0]
             disease_name = top.get('name')

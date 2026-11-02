@@ -43,11 +43,12 @@ def pathology():
             flash(f"Diagnosis failed: {result.get('message', 'Unknown error')}", 'error')
             return redirect(request.url)
 
-        # Parse Plant.id response
+        # Parse Plant.id v3 response (classifications nested under result)
         disease_name = None
         confidence = None
         try:
-            classifications = result.get('classifications', [])
+            result_data = result.get('result', {})
+            classifications = result_data.get('classifications', [])
             if classifications:
                 top = classifications[0]
                 disease_name = top.get('name')

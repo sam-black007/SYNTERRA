@@ -3,7 +3,10 @@
 ## Phase 1: Core Backend (Done)
 - [x] Initialize GitHub repo `sam-black007/SYNTERRA`
 - [x] Flask app factory with SQLAlchemy + CSRF
-- [x] Plant.id API client (`plantid_client.py`) — identify + test connection
+- [x] Plant.id API v3 client (`plantid_client.py`) — identify + test connection
+- [x] Correct endpoint: `https://plant.id/api/v3` (was returning 404 on crop.kindwise.com)
+- [x] Base64 JSON request format for Plant.id v3 identify endpoint
+- [x] Response parsing: classifications nested under `result.classifications`
 - [x] Diagnosis model (SQLite)
 - [x] REST API endpoints (`/api/diagnose`, `/api/diagnoses`, `/api/plantid/*`)
 - [x] CSRF exemption for API blueprint
@@ -19,7 +22,7 @@
 - [x] Verify app starts (`/api/health` returns 200)
 - [x] Verify Plant.id connection test works (64 credits remaining)
 - [x] Verify CSRF fix — API endpoints work, web forms protected
-- [x] Ready for image upload diagnosis testing
+- [x] Verify Plant.id v3 endpoint returns 200 (404 error resolved)
 
 ## Phase 3: Repo Updates (Done)
 - [x] Commit all local changes
@@ -37,3 +40,4 @@
 **Repo:** https://github.com/sam-black007/SYNTERRA
 **Local path:** `D:\ml challenge\SYNTERRA`
 **API Key:** Configured locally in `.env` (gitignored, 64 credits remaining)
+**Issue resolved:** Plant.id API 404 → now using correct `https://plant.id/api/v3` endpoint
