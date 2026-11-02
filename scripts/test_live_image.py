@@ -19,8 +19,13 @@ def run_live_image_test():
     print("=" * 72)
 
     # 1. Load and optimize image for upload (max 1024x1024)
-    print("\n[1/3] Loading real tomato leaf photograph (test_leaf.jpg)...")
-    img = Image.open("test_leaf.jpg")
+    from pathlib import Path
+    sample_path = Path(__file__).resolve().parent.parent / "tests" / "samples" / "tomato_blight.jpg"
+    if not sample_path.exists():
+        sample_path = Path("test_leaf.jpg")
+
+    print(f"\n[1/3] Loading real tomato leaf photograph ({sample_path.name})...")
+    img = Image.open(sample_path)
     img.thumbnail((1024, 1024))
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=88)

@@ -68,6 +68,17 @@ python scripts/serial_bridge.py
 python scripts/serial_bridge.py --mock
 ```
 
+## Testing & System Verification
+
+Run full-stack monitoring checks against your live running server:
+```powershell
+# 1. Full-stack system health & endpoint latency check
+python scripts/monitor_test.py
+
+# 2. End-to-end real image diagnosis with Kindwise Crop.health API
+python scripts/test_live_image.py
+```
+
 ## Getting a Plant.id / Crop.health API Key
 
 1. Sign up at [plant.id](https://plant.id) or [kindwise.com](https://kindwise.com)
