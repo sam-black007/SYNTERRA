@@ -217,6 +217,34 @@ The firmware and backend continuously evaluate ambient photometric, thermal, psy
 
 ---
 
+## 🍅 Multi-Crop Botanical Profiles (Smart Species Adaptation)
+
+SYNTERRA automatically reconfigures autonomous watering thresholds, target VPD limits, and photoperiod goals based on the active crop:
+
+| Species Preset | Scientific Name | Category | Temp Target | Moisture Target | Auto-Watering Trigger | Target DLI | Optimal VPD |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **🍅 Tomato** | *Solanum lycopersicum* | Fruiting Solanaceae | $20–26^\circ\text{C}$ | $50–70\%$ | **$45\%$** | $16.0\text{ mol/m}^2/\text{d}$ | $0.8–1.2\text{ kPa}$ |
+| **🌿 Sweet Basil** | *Ocimum basilicum* | Culinary Herb | $20–25^\circ\text{C}$ | $60–80\%$ | **$55\%$** | $12.0\text{ mol/m}^2/\text{d}$ | $0.7–1.1\text{ kPa}$ |
+| **🍓 Strawberry** | *Fragaria × ananassa* | Berry Crop | $18–24^\circ\text{C}$ | $55–70\%$ | **$50\%$** | $14.0\text{ mol/m}^2/\text{d}$ | $0.6–1.0\text{ kPa}$ |
+| **🥬 Lettuce** | *Lactuca sativa* | Leafy Green | $15–21^\circ\text{C}$ | $65–85\%$ | **$60\%$** | $10.0\text{ mol/m}^2/\text{d}$ | $0.5–0.9\text{ kPa}$ |
+| **🌵 Succulent** | *Aloe barbadensis* | Xerophytic Succulent | $21–32^\circ\text{C}$ | $15–35\%$ | **$18\%$** | $18.0\text{ mol/m}^2/\text{d}$ | $1.2–1.6\text{ kPa}$ |
+| **🪴 Monstera** | *Monstera deliciosa* | Tropical Aroid | $20–28^\circ\text{C}$ | $40–60\%$ | **$35\%$** | $8.0\text{ mol/m}^2/\text{d}$ | $0.6–1.0\text{ kPa}$ |
+
+---
+
+## ☀️ Daily Light Integral (DLI) & Photoperiod Accumulator Engine
+
+Rather than evaluating instantaneous Lux in isolation, SYNTERRA tracks **Daily Light Integral (DLI)**—the cumulative photosynthetic photon flux delivered over a 24-hour cycle:
+
+$$\text{PPFD} \approx \frac{\text{Lux}}{54} \quad (\mu\text{mol} \cdot \text{m}^{-2} \cdot \text{s}^{-1})$$
+
+$$\text{DLI} = \sum_{i} \left( \text{PPFD}_i \times \Delta t_i \right) \times 10^{-6} \quad (\text{mol} \cdot \text{m}^{-2} \cdot \text{d}^{-1})$$
+
+* **Photoperiod Tracker:** Continuously integrates active daylight duration ($\text{Lux} \ge 200$) vs. species target photoperiod.
+* **Photometric Gauge:** Displays real-time progress toward the crop's daily photon quota ($16\text{ mol/m}^2/\text{d}$ for Tomato).
+
+---
+
 ## ⏱️ 6-Second Dual-Link Telemetry Pipeline
 
 The node operates on a **6-second cadence (`6000 ms`)** with dual-link transmission:
@@ -294,6 +322,9 @@ python scripts/serial_bridge.py
 | `/dashboard` | `GET` | **Real-Time React 18 Operations Console** |
 | `/api/sensors/telemetry` | `POST` | Ingest sensor telemetry JSON (`X-Device-Token` header) |
 | `/api/sensors/latest` | `GET` | Retrieve latest fused sensor readings with condition badges |
+| `/api/sensors/dli` | `GET` | **Calculate cumulative Daily Light Integral (DLI) & photoperiod** |
+| `/api/crops/profiles` | `GET` | List botanical species presets with custom targets |
+| `/api/crops/active` | `GET/POST`| Get or switch active crop preset (auto-calibrates irrigation) |
 | `/api/sensors/history` | `GET` | Historical telemetry records (`?limit=50`) |
 | `/api/sensors/export/csv`| `GET` | Export complete sensor history as CSV |
 | `/api/diagnose` | `POST` | Upload leaf photo &rarr; Kindwise Crop.Health disease detection |

@@ -1,6 +1,7 @@
 import io
 import csv
 import base64
+from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request, current_app, Response
 from app import db, socketio
 from app.models.diagnosis import Diagnosis
@@ -305,6 +306,203 @@ def export_sensor_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=synterra_telemetry_export.csv"}
     )
+
+
+# ============================================================================
+# Botanical Crop Profiles & Photoperiod DLI Accumulator
+# ============================================================================
+
+CROP_PROFILES = {
+    'tomato': {
+        'key': 'tomato',
+        'name': 'Cherry / Beefsteak Tomato',
+        'scientific_name': 'Solanum lycopersicum',
+        'category': 'Fruiting Solanaceae',
+        'target_temp_c': [20.0, 26.0],
+        'target_humidity_pct': [55.0, 70.0],
+        'target_soil_pct': [50.0, 70.0],
+        'watering_threshold_pct': 45.0,
+        'target_dli_mol': 16.0,
+        'photoperiod_hours': 14.0,
+        'optimal_vpd_kpa': [0.8, 1.2],
+        'icon': '🍅',
+        'notes': 'High light demand; requires balanced calcium to avoid blossom end rot.',
+    },
+    'basil': {
+        'key': 'basil',
+        'name': 'Genovese Sweet Basil',
+        'scientific_name': 'Ocimum basilicum',
+        'category': 'Culinary Herb',
+        'target_temp_c': [20.0, 25.0],
+        'target_humidity_pct': [50.0, 65.0],
+        'target_soil_pct': [60.0, 80.0],
+        'watering_threshold_pct': 55.0,
+        'target_dli_mol': 12.0,
+        'photoperiod_hours': 12.0,
+        'optimal_vpd_kpa': [0.7, 1.1],
+        'icon': '🌿',
+        'notes': 'Prefers consistent rhizosphere moisture and warm ambient air.',
+    },
+    'strawberry': {
+        'key': 'strawberry',
+        'name': 'Eversweet Strawberry',
+        'scientific_name': 'Fragaria × ananassa',
+        'category': 'Berry Crop',
+        'target_temp_c': [18.0, 24.0],
+        'target_humidity_pct': [60.0, 75.0],
+        'target_soil_pct': [55.0, 70.0],
+        'watering_threshold_pct': 50.0,
+        'target_dli_mol': 14.0,
+        'photoperiod_hours': 12.0,
+        'optimal_vpd_kpa': [0.6, 1.0],
+        'icon': '🍓',
+        'notes': 'Requires high crown aeration and balanced solar radiation.',
+    },
+    'lettuce': {
+        'key': 'lettuce',
+        'name': 'Butterhead Lettuce',
+        'scientific_name': 'Lactuca sativa',
+        'category': 'Leafy Green',
+        'target_temp_c': [15.0, 21.0],
+        'target_humidity_pct': [50.0, 70.0],
+        'target_soil_pct': [65.0, 85.0],
+        'watering_threshold_pct': 60.0,
+        'target_dli_mol': 10.0,
+        'photoperiod_hours': 12.0,
+        'optimal_vpd_kpa': [0.5, 0.9],
+        'icon': '🥬',
+        'notes': 'Cool-season crop; elevated heat causes bolting and tip burn.',
+    },
+    'succulent': {
+        'key': 'succulent',
+        'name': 'Desert Aloe / Echeveria',
+        'scientific_name': 'Aloe barbadensis',
+        'category': 'Xerophytic Succulent',
+        'target_temp_c': [21.0, 32.0],
+        'target_humidity_pct': [30.0, 50.0],
+        'target_soil_pct': [15.0, 35.0],
+        'watering_threshold_pct': 18.0,
+        'target_dli_mol': 18.0,
+        'photoperiod_hours': 10.0,
+        'optimal_vpd_kpa': [1.2, 1.6],
+        'icon': '🌵',
+        'notes': 'Requires deep soak-and-dry irrigation cycles and low humidity.',
+    },
+    'monstera': {
+        'key': 'monstera',
+        'name': 'Swiss Cheese Plant',
+        'scientific_name': 'Monstera deliciosa',
+        'category': 'Tropical Aroid',
+        'target_temp_c': [20.0, 28.0],
+        'target_humidity_pct': [60.0, 80.0],
+        'target_soil_pct': [40.0, 60.0],
+        'watering_threshold_pct': 35.0,
+        'target_dli_mol': 8.0,
+        'photoperiod_hours': 10.0,
+        'optimal_vpd_kpa': [0.6, 1.0],
+        'icon': '🪴',
+        'notes': 'Thrives in warm, humid microclimates with indirect light.',
+    }
+}
+
+ACTIVE_CROP_KEY = 'tomato'
+
+
+@api_bp.route('/crops/profiles', methods=['GET'])
+def list_crop_profiles():
+    """Retrieve full catalog of botanical crop profiles."""
+    return jsonify({
+        'success': True,
+        'active_crop_key': ACTIVE_CROP_KEY,
+        'profiles': list(CROP_PROFILES.values()),
+    }), 200
+
+
+@api_bp.route('/crops/active', methods=['GET', 'POST'])
+def manage_active_crop():
+    """Get or configure active botanical species profile."""
+    global ACTIVE_CROP_KEY
+    if request.method == 'POST':
+        payload = request.get_json(silent=True) or {}
+        crop_key = payload.get('crop_key', '').lower().strip()
+        if crop_key in CROP_PROFILES:
+            ACTIVE_CROP_KEY = crop_key
+            profile = CROP_PROFILES[crop_key]
+            # Automatically synchronize autonomous irrigation threshold to crop's optimal root requirement
+            irrigation_manager.configure_auto_mode(
+                enabled=irrigation_manager.auto_mode_enabled,
+                threshold_pct=profile['watering_threshold_pct']
+            )
+            try:
+                socketio.emit('crop_profile_update', {
+                    'active_crop': profile,
+                    'watering_threshold_pct': profile['watering_threshold_pct']
+                })
+            except Exception as e:
+                current_app.logger.warning(f"SocketIO crop update warning: {e}")
+            return jsonify({
+                'success': True,
+                'message': f"Active crop switched to {profile['name']}",
+                'active_crop': profile,
+            }), 200
+        return jsonify({'success': False, 'error': 'INVALID_CROP', 'message': f"Unknown crop key '{crop_key}'"}), 400
+
+    profile = CROP_PROFILES.get(ACTIVE_CROP_KEY, CROP_PROFILES['tomato'])
+    return jsonify({'success': True, 'active_crop': profile}), 200
+
+
+@api_bp.route('/sensors/dli', methods=['GET'])
+def get_daily_light_integral():
+    """Calculate accumulated Daily Light Integral (DLI) & photoperiod for today."""
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    readings = SensorReading.query.filter(
+        SensorReading.timestamp >= today_start,
+        SensorReading.light_lux.isnot(None)
+    ).order_by(SensorReading.timestamp.asc()).all()
+
+    # If few readings exist today, pull recent telemetry history
+    if len(readings) < 5:
+        readings = SensorReading.query.filter(
+            SensorReading.light_lux.isnot(None)
+        ).order_by(SensorReading.timestamp.desc()).limit(150).all()
+        readings.reverse()
+
+    accumulated_dli = 0.0
+    active_photoperiod_seconds = 0.0
+    latest_lux = 0.0
+
+    for i in range(len(readings)):
+        r = readings[i]
+        lux = max(0.0, r.light_lux or 0.0)
+        latest_lux = lux
+        ppfd = lux / 54.0  # ~54 Lux per umol/m2/s for broad-spectrum sunlight
+        
+        if i < len(readings) - 1:
+            dt = (readings[i+1].timestamp - r.timestamp).total_seconds()
+            dt = max(1.0, min(dt, 60.0))
+        else:
+            dt = 6.0  # 6-second cadence
+        
+        accumulated_dli += ppfd * dt * 1e-6
+        if lux >= 200.0:  # Active daylight threshold
+            active_photoperiod_seconds += dt
+
+    crop = CROP_PROFILES.get(ACTIVE_CROP_KEY, CROP_PROFILES['tomato'])
+    target_dli = crop['target_dli_mol']
+    progress_pct = round(min(100.0, (accumulated_dli / target_dli) * 100.0), 1) if target_dli > 0 else 0.0
+
+    return jsonify({
+        'success': True,
+        'date': today_start.strftime('%Y-%m-%d'),
+        'accumulated_dli': round(accumulated_dli, 2),
+        'target_dli': target_dli,
+        'progress_pct': progress_pct,
+        'photoperiod_hours': round(active_photoperiod_seconds / 3600.0, 1),
+        'photoperiod_target_hours': crop['photoperiod_hours'],
+        'current_lux': latest_lux,
+        'current_ppfd': round(latest_lux / 54.0, 1),
+        'active_crop': crop,
+    }), 200
 
 
 # ============================================================================

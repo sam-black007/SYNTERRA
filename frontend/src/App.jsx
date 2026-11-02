@@ -153,6 +153,17 @@ export default function App() {
     reservoir_ok: true
   });
 
+  const [cropProfiles, setCropProfiles] = useState([]);
+  const [activeCrop, setActiveCrop] = useState(null);
+  const [dliData, setDliData] = useState({
+    accumulated_dli: 0.0,
+    target_dli: 16.0,
+    progress_pct: 0.0,
+    photoperiod_hours: 0.0,
+    photoperiod_target_hours: 14.0,
+    current_ppfd: 0.0
+  });
+
   const [lastPacketTime, setLastPacketTime] = useState(null);
   const [isInjecting, setIsInjecting] = useState(false);
   const [isDiagnosing, setIsDiagnosing] = useState(false);
@@ -233,9 +244,15 @@ export default function App() {
       }
     });
 
+    socket.on('crop_profile_update', (data) => {
+      if (data && data.active_crop) {
+        setActiveCrop(data.active_crop);
+      }
+    });
+
     fetchInitialData();
 
-    // Fallback heartbeat polling every 3s in case of connection drop
+    // Fallback heartbeat polling every 5s in case of connection drop
     const heartbeat = setInterval(() => {
       fetch('/api/sensors/latest')
         .then((r) => r.json())
@@ -253,6 +270,13 @@ export default function App() {
           if (data.irrigation) setIrrigationStatus(data.irrigation);
         })
         .catch(() => {});
+
+      fetch('/api/sensors/dli')
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success) setDliData(data);
+        })
+        .catch(() => {});
     }, 5000);
 
     return () => {
@@ -263,13 +287,27 @@ export default function App() {
 
   async function fetchInitialData() {
     try {
-      const [telemRes, histRes, diagRes, integRes, irrigRes] = await Promise.all([
+      const [telemRes, histRes, diagRes, integRes, irrigRes, cropsRes, dliRes] = await Promise.all([
         fetch('/api/sensors/latest'),
         fetch('/api/sensors/history?limit=30'),
         fetch('/api/diagnoses'),
         fetch('/api/integrations/plantid/test', { method: 'POST' }),
-        fetch('/api/irrigation/status')
+        fetch('/api/irrigation/status'),
+        fetch('/api/crops/profiles'),
+        fetch('/api/sensors/dli')
       ]);
+
+      if (cropsRes.ok) {
+        const cData = await cropsRes.json();
+        if (cData.profiles) setCropProfiles(cData.profiles);
+        const active = cData.profiles?.find((p) => p.key === cData.active_crop_key);
+        if (active) setActiveCrop(active);
+      }
+
+      if (dliRes.ok) {
+        const dData = await dliRes.json();
+        if (dData.success) setDliData(dData);
+      }
 
       if (telemRes.ok) {
         const t = await telemRes.json();
@@ -348,6 +386,28 @@ export default function App() {
       console.error('Accuracy compare failed:', err);
     } finally {
       setIsComparingAccuracy(false);
+    }
+  };
+
+  // Switch Botanical Species Profile
+  const handleSelectCrop = async (cropKey) => {
+    try {
+      const res = await fetch('/api/crops/active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ crop_key: cropKey })
+      });
+      const data = await res.json();
+      if (data.success && data.active_crop) {
+        setActiveCrop(data.active_crop);
+        const dRes = await fetch('/api/sensors/dli');
+        if (dRes.ok) {
+          const dData = await dRes.json();
+          setDliData(dData);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update active crop profile:', err);
     }
   };
 
@@ -702,6 +762,38 @@ export default function App() {
               </div>
             </div>
 
+            {/* Botanical Species Intelligence Selector Bar */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-[#0e1828] to-[#0a1220] border border-emerald-950/80 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="text-2xl p-2.5 rounded-xl bg-emerald-950/50 border border-emerald-800/40 flex items-center justify-center shrink-0">
+                  {activeCrop?.icon || '🍅'}
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Botanical Target Profile</span>
+                    <span className="text-xs font-bold text-white">{activeCrop?.name || 'Cherry / Beefsteak Tomato'}</span>
+                    <span className="text-xs text-slate-500 italic hidden sm:inline">({activeCrop?.scientific_name || 'Solanum lycopersicum'})</span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">{activeCrop?.notes || 'High light demand; requires balanced calcium to avoid blossom end rot.'}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0">
+                <span className="text-xs font-semibold text-slate-400">Species Preset:</span>
+                <select
+                  value={activeCrop?.key || 'tomato'}
+                  onChange={(e) => handleSelectCrop(e.target.value)}
+                  className="bg-slate-950 border border-slate-700 hover:border-emerald-500 text-slate-100 text-xs font-bold rounded-xl px-3 py-2 outline-none transition cursor-pointer"
+                >
+                  {cropProfiles.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.icon} {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             {/* Live Microclimate Environmental Assessment Banner */}
             <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-[#101827] to-[#0c1322] border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
               <div className="flex items-center gap-3">
@@ -740,7 +832,7 @@ export default function App() {
                   <span className="text-base font-semibold text-slate-400">°C</span>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
-                  <span>DHT11 Sensor</span>
+                  <span>Target: {activeCrop?.target_temp_c ? `${activeCrop.target_temp_c[0]}–${activeCrop.target_temp_c[1]}°C` : '20–26°C'}</span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${tempBadge.bg}`}>
                     {tempBadge.label}
                   </span>
@@ -762,7 +854,7 @@ export default function App() {
                   <span className="text-base font-semibold text-slate-400">%</span>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
-                  <span>DHT11 Sensor</span>
+                  <span>Target: {activeCrop?.target_humidity_pct ? `${activeCrop.target_humidity_pct[0]}–${activeCrop.target_humidity_pct[1]}%` : '55–70%'}</span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${humBadge.bg}`}>
                     {humBadge.label}
                   </span>
@@ -784,7 +876,7 @@ export default function App() {
                   <span className="text-base font-semibold text-slate-400">%</span>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
-                  <span>ADC: {latestTelemetry?.soil_raw_adc || '--'}</span>
+                  <span>Auto @ {activeCrop?.watering_threshold_pct || 45}%</span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${soilBadge.bg}`}>
                     {soilBadge.label}
                   </span>
@@ -806,7 +898,7 @@ export default function App() {
                   <span className="text-base font-semibold text-slate-400">Lux</span>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
-                  <span>BH1750 Sensor</span>
+                  <span>Goal: {activeCrop?.target_dli_mol || 16} DLI ({activeCrop?.photoperiod_hours || 14}h)</span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${lightBadge.bg}`}>
                     {lightBadge.label}
                   </span>
@@ -814,57 +906,107 @@ export default function App() {
               </div>
             </div>
 
-            {/* Agronomic VPD & Interlock Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Agronomic VPD, DLI Accumulator & Safety Interlock Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Vapor Pressure Deficit (VPD) Agronomic Card */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-[#0e1628] border border-slate-800 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-xl bg-indigo-950/50 text-indigo-400 border border-indigo-900/40">
-                    <Gauge className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Vapor Pressure Deficit (VPD)</span>
-                      <span className="text-lg font-black text-white">{currentVPD !== null ? `${currentVPD} kPa` : '--'}</span>
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-[#0e1628] border border-slate-800 flex flex-col justify-between gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 rounded-xl bg-indigo-950/50 text-indigo-400 border border-indigo-900/40">
+                      <Gauge className="w-5 h-5" />
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">Calculated from canopy psychrometric temperature & relative humidity.</p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Vapor Pressure Deficit (VPD)</span>
+                        <span className="text-lg font-black text-white">{currentVPD !== null ? `${currentVPD} kPa` : '--'}</span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">Optimal range: {activeCrop?.optimal_vpd_kpa ? `${activeCrop.optimal_vpd_kpa[0]}–${activeCrop.optimal_vpd_kpa[1]} kPa` : '0.8–1.2 kPa'}</p>
+                    </div>
                   </div>
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${vpdInfo.bg} ${vpdInfo.color} border border-slate-700/60 shrink-0`}>
+                    {vpdInfo.label}
+                  </span>
                 </div>
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${vpdInfo.bg} ${vpdInfo.color} border border-slate-700/60`}>
-                  {vpdInfo.label}
-                </span>
+                <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-800/60 flex items-center justify-between">
+                  <span>Psychrometric transpirational pressure</span>
+                  <span className="text-indigo-400 font-medium">Canopy Stomata Equilibrium</span>
+                </div>
+              </div>
+
+              {/* Daily Light Integral (DLI) & Photoperiod Accumulator Card */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-[#121c2e] border border-slate-800 flex flex-col justify-between gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 rounded-xl bg-amber-950/50 text-amber-400 border border-amber-900/40">
+                      <Sun className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Daily Light Integral (DLI)</span>
+                        <span className="text-lg font-black text-white">{dliData?.accumulated_dli || '0.0'}</span>
+                        <span className="text-xs font-bold text-slate-400">/ {dliData?.target_dli || activeCrop?.target_dli_mol || '16.0'} mol/m²/d</span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Photoperiod: <span className="text-amber-300 font-bold">{dliData?.photoperiod_hours || '0.0'}h</span> / {dliData?.photoperiod_target_hours || activeCrop?.photoperiod_hours || '14.0'}h target
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-950/50 text-amber-300 border border-amber-700/50 shrink-0">
+                    {dliData?.progress_pct || 0}%
+                  </span>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="w-full bg-slate-800/80 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-amber-500 to-yellow-400 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, dliData?.progress_pct || 0)}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/60">
+                  <span>Current PPFD: {dliData?.current_ppfd || Math.round((latestTelemetry?.light_lux || 0)/54)} µmol/m²/s</span>
+                  <span className="text-emerald-400 font-medium">
+                    {(dliData?.progress_pct || 0) >= 80 ? '✓ Photoperiod Target Reached' : 'Accumulating Solar Photons'}
+                  </span>
+                </div>
               </div>
 
               {/* Water Reservoir Interlock State */}
-              <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 ${
+              <div className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 ${
                 latestTelemetry?.water_reservoir_ok !== false
                   ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
                   : 'bg-rose-950/30 border-rose-500/50 text-rose-300'
               }`}>
-                <div className="flex items-center gap-3">
-                  {latestTelemetry?.water_reservoir_ok !== false ? (
-                    <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
-                  ) : (
-                    <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
-                  )}
-                  <div>
-                    <p className="font-bold text-xs uppercase tracking-wider">
-                      {latestTelemetry?.water_reservoir_ok !== false ? 'Irrigation Reservoir: SAFE & ARMED' : 'RESERVOIR EMPTY: PUMP INTERLOCK ENGAGED'}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {latestTelemetry?.water_reservoir_ok !== false
-                        ? 'Hardware float switch indicates adequate liquid supply.'
-                        : 'Pump relay disengaged to prevent dry-run overheating.'}
-                    </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {latestTelemetry?.water_reservoir_ok !== false ? (
+                      <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                    )}
+                    <div>
+                      <p className="font-bold text-xs uppercase tracking-wider">
+                        {latestTelemetry?.water_reservoir_ok !== false ? 'Reservoir: SAFE & ARMED' : 'RESERVOIR EMPTY: INTERLOCKED'}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {latestTelemetry?.water_reservoir_ok !== false
+                          ? 'Hardware float switch reports liquid supply.'
+                          : 'Pump relay locked out to prevent motor dry-run burn.'}
+                      </p>
+                    </div>
                   </div>
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg uppercase shrink-0 ${
+                    latestTelemetry?.water_reservoir_ok !== false
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                  }`}>
+                    {latestTelemetry?.water_reservoir_ok !== false ? 'ARMED' : 'INTERLOCKED'}
+                  </span>
                 </div>
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-lg uppercase ${
-                  latestTelemetry?.water_reservoir_ok !== false
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                }`}>
-                  {latestTelemetry?.water_reservoir_ok !== false ? 'ARMED' : 'INTERLOCKED'}
-                </span>
+                <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-800/60 flex items-center justify-between">
+                  <span>Hardware Submersible Solenoid</span>
+                  <span className="text-emerald-400 font-medium">Auto-Trigger at {activeCrop?.watering_threshold_pct || 45}% Soil</span>
+                </div>
               </div>
             </div>
 
