@@ -1,3 +1,4 @@
+import os
 import io
 import csv
 import json
@@ -16,6 +17,7 @@ from app.services.gbif_service import gbif_service
 from app.services.multimodal_vision_service import multimodal_vision_service
 from app.services.agronomic_analytics_service import agronomic_analytics
 from app.services.telegram_bot_service import telegram_bot
+from app.services.whatsapp_service import whatsapp_bot
 from app.services.fleet_service import fleet_service
 
 api_bp = Blueprint('api', __name__)
@@ -1048,3 +1050,60 @@ def execute_telegram_command():
     result = telegram_bot.execute_command(command)
     return jsonify(result), 200
 
+
+
+# ============================================================================
+# WhatsApp Farm Manager & Instant Notification Endpoints
+# ============================================================================
+
+@api_bp.route('/whatsapp/status', methods=['GET'])
+def get_whatsapp_status():
+    """Check WhatsApp notification gateway status."""
+    return jsonify(whatsapp_bot.get_status()), 200
+
+
+@api_bp.route('/whatsapp/test', methods=['POST'])
+def send_whatsapp_test():
+    """Send test alert pulse to WhatsApp."""
+    latest = SensorReading.query.order_by(SensorReading.timestamp.desc()).first()
+    t = latest.temperature_c if latest else 24.2
+    h = latest.humidity_pct if latest else 62.0
+    s = latest.soil_moisture_pct if latest else 55.0
+    l = latest.light_lux if latest else 1250
+    test_msg = (
+        f"🌿 *SYNTERRA // TEST WHATSAPP ALERT PULSE*\n\n"
+        f"✅ *Status:* Telemetry Gateway Online\n"
+        f"🌡️ *Temp:* {t}°C | *RH:* {h}%\n"
+        f"🌱 *Soil:* {s}% | *Lux:* {l}\n"
+        f"🕒 _{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}_"
+    )
+    res = whatsapp_bot.send_message(test_msg)
+    return jsonify(res), 200
+
+
+@api_bp.route('/whatsapp/command', methods=['POST'])
+def execute_whatsapp_command():
+    """Execute remote command via WhatsApp (/status, /water <sec>, /stop, /help)."""
+    data = request.get_json(silent=True) or {}
+    command = data.get('command', '/status')
+    result = whatsapp_bot.execute_command(command)
+    return jsonify(result), 200
+
+
+@api_bp.route('/whatsapp/config', methods=['POST'])
+def configure_whatsapp():
+    """Update runtime phone number and CallMeBot API key."""
+    data = request.get_json(silent=True) or {}
+    phone = data.get('phone', '').strip()
+    api_key = data.get('api_key', '').strip()
+    if phone:
+        whatsapp_bot.phone = phone
+        os.environ['WHATSAPP_PHONE'] = phone
+    if api_key:
+        whatsapp_bot.api_key = api_key
+        os.environ['CALLMEBOT_API_KEY'] = api_key
+    return jsonify({
+        'success': True,
+        'message': 'WhatsApp credentials updated successfully!',
+        'status': whatsapp_bot.get_status()
+    }), 200

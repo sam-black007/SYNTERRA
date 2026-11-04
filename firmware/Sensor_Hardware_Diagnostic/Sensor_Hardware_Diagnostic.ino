@@ -357,7 +357,7 @@ public:
 // ==============================================================================
 SensorManager sensorManager;
 unsigned long lastTelemetryTime = 0;
-const unsigned long telemetryInterval = 6000; // 6-Second Cadence (6000 ms)
+const unsigned long telemetryInterval = 5000; // 6-Second Cadence (6000 ms)
 int telemetryCycle = 0;
 
 void setup() {

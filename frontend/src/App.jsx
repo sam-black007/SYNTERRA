@@ -36,6 +36,8 @@ import {
   ShieldAlert,
   Bot,
   Globe,
+  MessageSquare,
+  Phone,
   Layers,
   Atom,
   Bell,
@@ -200,6 +202,13 @@ export default function App() {
   const [telegramSimOutput, setTelegramSimOutput] = useState('');
   const [telegramCmdInput, setTelegramCmdInput] = useState('/status');
   const [isSendingTg, setIsSendingTg] = useState(false);
+  const [whatsappStatus, setWhatsappStatus] = useState(null);
+  const [whatsappSimOutput, setWhatsappSimOutput] = useState('');
+  const [whatsappPhoneInput, setWhatsappPhoneInput] = useState('');
+  const [whatsappKeyInput, setWhatsappKeyInput] = useState('');
+  const [whatsappCmdInput, setWhatsappCmdInput] = useState('/status');
+  const [isSendingWa, setIsSendingWa] = useState(false);
+  const [messengerTab, setMessengerTab] = useState('whatsapp'); // 'whatsapp' | 'telegram'
   const fileInputRef = useRef(null);
 
   // Initialize Socket.io and data polling
@@ -431,6 +440,13 @@ export default function App() {
           if (tg.success) setTelegramStatus(tg);
         })
         .catch(() => {});
+
+      fetch('/api/whatsapp/status')
+        .then((r) => r.json())
+        .then((wa) => {
+          if (wa.success) setWhatsappStatus(wa);
+        })
+        .catch(() => {});
     } catch (err) {
       console.warn('Initial data load warning:', err);
     }
@@ -537,6 +553,61 @@ export default function App() {
       }
     } catch (err) {
       setTelegramSimOutput('Command execution failed: ' + err.message);
+    }
+  };
+
+  // Send Test Alert to WhatsApp
+  const handleSendWhatsappTest = async () => {
+    setIsSendingWa(true);
+    try {
+      const res = await fetch('/api/whatsapp/test', { method: 'POST' });
+      const data = await res.json();
+      setWhatsappSimOutput(data.message || data.preview || (data.response ? 'Gateway response: ' + data.response : 'Test alert dispatched to WhatsApp!'));
+    } catch (err) {
+      setWhatsappSimOutput('Error sending WhatsApp alert: ' + err.message);
+    } finally {
+      setIsSendingWa(false);
+    }
+  };
+
+  // Save WhatsApp Phone & CallMeBot API Key
+  const handleSaveWhatsappConfig = async () => {
+    if (!whatsappPhoneInput.trim() && !whatsappKeyInput.trim()) return;
+    try {
+      const res = await fetch('/api/whatsapp/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: whatsappPhoneInput.trim(),
+          api_key: whatsappKeyInput.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.status) setWhatsappStatus(data.status);
+      setWhatsappSimOutput(data.message || 'WhatsApp credentials saved successfully!');
+    } catch (err) {
+      setWhatsappSimOutput('Config failed: ' + err.message);
+    }
+  };
+
+  // Execute 2-Way Command on WhatsApp
+  const handleRunWhatsappCommand = async () => {
+    if (!whatsappCmdInput.trim()) return;
+    try {
+      const res = await fetch('/api/whatsapp/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: whatsappCmdInput.trim() })
+      });
+      const data = await res.json();
+      setWhatsappSimOutput(data.reply || JSON.stringify(data));
+      if (whatsappCmdInput.startsWith('/water')) {
+        fetch('/api/irrigation/status')
+          .then((r) => r.json())
+          .then((ir) => { if (ir.irrigation) setIrrigationStatus(ir.irrigation); });
+      }
+    } catch (err) {
+      setWhatsappSimOutput('Command execution failed: ' + err.message);
     }
   };
 
@@ -2314,22 +2385,28 @@ export default function App() {
         {/* ==================================================================== */}
         {activeTab === 'dossiers' && (
           <div className="space-y-6 animate-fadeIn">
-            {/* Telegram Remote Farm Manager & Alert Bot Console */}
+            {/* Dual-Channel Remote Farm Manager Hub: WhatsApp & Telegram */}
             <div className="bg-[#0d1422] border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
               <div className="flex items-center justify-between flex-wrap gap-4 pb-4 border-b border-slate-800">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-cyan-950/60 text-cyan-400 border border-cyan-800/40">
-                    <Bell className="w-5 h-5 text-cyan-400" />
+                  <div className={`p-2.5 rounded-xl border transition ${
+                    messengerTab === 'whatsapp'
+                      ? 'bg-emerald-950/70 text-emerald-400 border-emerald-700/50'
+                      : 'bg-cyan-950/60 text-cyan-400 border-cyan-800/40'
+                  }`}>
+                    {messengerTab === 'whatsapp' ? <MessageSquare className="w-5 h-5 text-emerald-400" /> : <Bell className="w-5 h-5 text-cyan-400" />}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="text-base font-bold text-white">Telegram Remote Farm Manager &amp; Alert Bot</h3>
+                      <h3 className="text-base font-bold text-white">
+                        {messengerTab === 'whatsapp' ? 'WhatsApp Remote Farm Alert Gateway' : 'Telegram Remote Farm Manager & Alert Bot'}
+                      </h3>
                       <span className={`text-[10px] font-mono px-2 py-0.5 rounded border uppercase font-bold ${
-                        telegramStatus?.configured
+                        (messengerTab === 'whatsapp' ? whatsappStatus?.configured : telegramStatus?.configured)
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                           : 'bg-slate-800 text-slate-400 border-slate-700'
                       }`}>
-                        {telegramStatus?.mode || 'SIMULATED STANDBY'}
+                        {messengerTab === 'whatsapp' ? (whatsappStatus?.mode || 'SIMULATED STANDBY') : (telegramStatus?.mode || 'SIMULATED STANDBY')}
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">
@@ -2339,58 +2416,191 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleSendTelegramTest}
-                    disabled={isSendingTg}
-                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-black font-bold text-xs shadow-md transition disabled:opacity-50"
-                  >
-                    <Send className={`w-3.5 h-3.5 ${isSendingTg ? 'animate-bounce' : ''}`} />
-                    <span>{isSendingTg ? 'Transmitting...' : 'Send Test Alert Pulse'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* 2-Way Command Terminal Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2.5">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                    <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>2-Way Remote Command Terminal</span>
-                  </span>
-                  <p className="text-[11px] text-slate-400">
-                    Execute field commands remotely (supported: <code>/status</code>, <code>/water 12</code>, <code>/stop</code>, <code>/help</code>):
-                  </p>
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="text"
-                      value={telegramCmdInput}
-                      onChange={(e) => setTelegramCmdInput(e.target.value)}
-                      placeholder="/status"
-                      className="flex-1 bg-black/50 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100 font-mono text-xs focus:outline-none focus:border-cyan-500"
-                    />
+                  {/* Channel Switcher Pills */}
+                  <div className="flex items-center p-1 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold">
                     <button
-                      onClick={handleRunTelegramCommand}
-                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs border border-slate-700 transition"
+                      onClick={() => setMessengerTab('whatsapp')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+                        messengerTab === 'whatsapp'
+                          ? 'bg-emerald-500 text-black font-bold shadow-md'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
                     >
-                      Execute
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>WhatsApp</span>
+                    </button>
+                    <button
+                      onClick={() => setMessengerTab('telegram')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+                        messengerTab === 'telegram'
+                          ? 'bg-cyan-500 text-black font-bold shadow-md'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Bell className="w-3.5 h-3.5" />
+                      <span>Telegram</span>
                     </button>
                   </div>
-                </div>
 
-                <div className="p-4 rounded-xl bg-black/60 border border-slate-800/90 font-mono text-[11px] space-y-1.5 flex flex-col justify-between">
-                  <div>
-                    <span className="text-slate-500 uppercase text-[10px] tracking-wider block mb-1">Bot Terminal Transmission Log:</span>
-                    <div
-                      className="text-slate-200 whitespace-pre-wrap leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: telegramSimOutput || 'Awaiting command execution or alert event...' }}
-                    />
-                  </div>
-                  <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-800 flex items-center justify-between">
-                    <span>Target: {telegramStatus?.chat_id || 'Standby Simulation Channel'}</span>
-                    <span className="text-cyan-400">Telegram Bot API v7.0</span>
-                  </div>
+                  {/* Test Pulse Button */}
+                  {messengerTab === 'whatsapp' ? (
+                    <button
+                      onClick={handleSendWhatsappTest}
+                      disabled={isSendingWa}
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-md transition disabled:opacity-50"
+                    >
+                      <Send className={`w-3.5 h-3.5 ${isSendingWa ? 'animate-bounce' : ''}`} />
+                      <span>{isSendingWa ? 'Transmitting...' : 'Send Test WhatsApp Alert'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSendTelegramTest}
+                      disabled={isSendingTg}
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-black font-bold text-xs shadow-md transition disabled:opacity-50"
+                    >
+                      <Send className={`w-3.5 h-3.5 ${isSendingTg ? 'animate-bounce' : ''}`} />
+                      <span>{isSendingTg ? 'Transmitting...' : 'Send Test Alert Pulse'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {/* WHATSAPP VIEW */}
+              {messengerTab === 'whatsapp' && (
+                <div className="space-y-4">
+                  {/* Setup & Configuration Box */}
+                  <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 text-xs space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="font-bold text-slate-200">CallMeBot WhatsApp Setup (Free &amp; Instant):</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400">
+                        1. Add <strong>+34 644 10 55 84</strong> &rarr; Send: <code>I allow callmebot to send me messages</code> &rarr; Get your API Key.
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1 uppercase font-mono">Your Phone (with Country Code)</label>
+                        <input
+                          type="text"
+                          placeholder="+919876543210"
+                          value={whatsappPhoneInput}
+                          onChange={(e) => setWhatsappPhoneInput(e.target.value)}
+                          className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100 text-xs font-mono outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1 uppercase font-mono">CallMeBot API Key</label>
+                        <input
+                          type="password"
+                          placeholder="e.g. 123456"
+                          value={whatsappKeyInput}
+                          onChange={(e) => setWhatsappKeyInput(e.target.value)}
+                          className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100 text-xs font-mono outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <button
+                          onClick={handleSaveWhatsappConfig}
+                          className="w-full py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-bold text-xs transition"
+                        >
+                          Save WhatsApp Config
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2-Way Command Terminal Row */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                        <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>WhatsApp 2-Way Remote Command Terminal</span>
+                      </span>
+                      <p className="text-[11px] text-slate-400">
+                        Execute field commands remotely (supported: <code>/status</code>, <code>/water 12</code>, <code>/stop</code>, <code>/help</code>):
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={whatsappCmdInput}
+                          onChange={(e) => setWhatsappCmdInput(e.target.value)}
+                          placeholder="/status"
+                          className="flex-1 bg-black/50 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                        />
+                        <button
+                          onClick={handleRunWhatsappCommand}
+                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 font-bold text-xs border border-slate-700 transition"
+                        >
+                          Execute
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-black/60 border border-slate-800/90 font-mono text-[11px] space-y-1.5 flex flex-col justify-between">
+                      <div>
+                        <span className="text-slate-500 uppercase text-[10px] tracking-wider block mb-1">WhatsApp Transmission Log:</span>
+                        <div
+                          className="text-slate-200 whitespace-pre-wrap leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: whatsappSimOutput || 'Awaiting command execution or alert event...' }}
+                        />
+                      </div>
+                      <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-800 flex items-center justify-between">
+                        <span>Recipient: {whatsappStatus?.phone_masked || 'Standby Simulation'}</span>
+                        <span className="text-emerald-400">CallMeBot / Twilio Gateway</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TELEGRAM VIEW */}
+              {messengerTab === 'telegram' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                        <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Telegram 2-Way Remote Command Terminal</span>
+                      </span>
+                      <p className="text-[11px] text-slate-400">
+                        Execute field commands remotely (supported: <code>/status</code>, <code>/water 12</code>, <code>/stop</code>, <code>/help</code>):
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={telegramCmdInput}
+                          onChange={(e) => setTelegramCmdInput(e.target.value)}
+                          placeholder="/status"
+                          className="flex-1 bg-black/50 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100 font-mono text-xs focus:outline-none focus:border-cyan-500"
+                        />
+                        <button
+                          onClick={handleRunTelegramCommand}
+                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs border border-slate-700 transition"
+                        >
+                          Execute
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-black/60 border border-slate-800/90 font-mono text-[11px] space-y-1.5 flex flex-col justify-between">
+                      <div>
+                        <span className="text-slate-500 uppercase text-[10px] tracking-wider block mb-1">Bot Terminal Transmission Log:</span>
+                        <div
+                          className="text-slate-200 whitespace-pre-wrap leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: telegramSimOutput || 'Awaiting command execution or alert event...' }}
+                        />
+                      </div>
+                      <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-800 flex items-center justify-between">
+                        <span>Target: {telegramStatus?.chat_id || 'Standby Simulation Channel'}</span>
+                        <span className="text-cyan-400">Telegram Bot API v7.0</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="bg-[#0d1422] border border-slate-800 rounded-2xl p-6">

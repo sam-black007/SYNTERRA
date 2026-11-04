@@ -37,7 +37,7 @@ SYNTERRA is an enterprise-grade IoT and AI-driven precision agriculture platform
    - [Predictive Fungal Spore Incubation Risk (Smith Period & Mills Model)](#9-predictive-fungal-spore-incubation-risk-meter-smith-period--mills-model)
    - [Growing Degree Days (GDD) & BBCH Crop Phenology Tracker](#10-growing-degree-days-gdd--bbch-crop-phenology-stage-tracker)
    - [Multi-Zone / Multi-Node Greenhouse Fleet Management](#11-multi-zone--multi-node-greenhouse-fleet-management)
-   - [Telegram Remote Farm Manager & Alert Bot with 2-Way Commands](#12-telegram-remote-farm-manager--alert-bot-with-2-way-commands)
+   - [Multi-Channel Remote Farm Manager: WhatsApp & Telegram Gateways](#12-multi-channel-remote-farm-manager-whatsapp--telegram-gateways)
 8. [System Architecture Flowcharts](#-system-architecture-flowcharts)
 9. [Complete REST API Reference](#-api-reference)
 10. [Troubleshooting & FAQ](#-troubleshooting--faq)
@@ -527,24 +527,30 @@ For commercial and research multi-bay facilities, SYNTERRA supports multi-node g
 
 ---
 
-### 12. Telegram Remote Farm Manager & Alert Bot with 2-Way Commands
+### 12. Multi-Channel Remote Farm Manager: WhatsApp & Telegram Gateways
 
 <p align="center">
-  <img src="docs/images/telegram_bot_console_live.png" alt="SYNTERRA Telegram Remote Farm Manager & Alert Bot Console" width="90%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);" />
+  <img src="docs/images/telegram_bot_console_live.png" alt="SYNTERRA Multi-Channel Remote Farm Manager Console" width="90%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);" />
 </p>
 
-SYNTERRA features direct bidirectional integration with the **Telegram Bot API v7.0**, enabling agronomists and operators to monitor and control their facility from any mobile device:
+SYNTERRA features a native dual-channel messaging gateway connecting directly to **WhatsApp** (via CallMeBot API and Twilio) and **Telegram** (Bot API v7.0), enabling agronomists and operators to monitor and control their facility from any mobile device:
 
+#### A. WhatsApp Instant Push Alert Gateway (CallMeBot & Twilio)
+* **Instant Free Personal Alerts:** Powered by the CallMeBot API. Send `I allow callmebot to send me messages` to `+34 644 10 55 84` on WhatsApp to receive your API key—zero business account required.
+* **Enterprise Twilio Option:** Seamlessly switches to Twilio WhatsApp API when `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` are present in `.env`.
+* **Automated Dispatch Events:** Dispatches instant WhatsApp notifications for critical soil drought ($< 20\%$), reservoir empty interlocks, and AI disease findings.
+
+#### B. Telegram Bot & 2-Way Command Terminal
 * **Automated Instant Push Notifications:**
-  * **🚨 Critical Soil Drought:** Dispatched immediately when soil moisture drops below critical limits ($< 20\%$).
+  * **🚨 Critical Soil Drought:** Dispatched immediately when soil moisture drops below critical limits.
   * **⚠️ Reservoir Safety Trip:** Dispatched when the hardware float switch detects a depleted water supply and disengages the pump.
   * **🔬 AI Disease Identification:** Dispatched when Gemini Multimodal AI or Kindwise classifies a high-confidence foliar pathogen.
-* **2-Way Remote Field Commands:**
+* **2-Way Remote Field Commands (Supported on both WhatsApp & Telegram):**
   * `/status` &rarr; Returns live canopy temperature, relative humidity, substrate moisture %, photometric flux lux, and active irrigation mode.
   * `/water <seconds>` &rarr; Remotely commands an emergency irrigation pulse (5s–30s) on relay GPIO D27.
   * `/stop` &rarr; Emergency shutoff command; cuts solenoid power in <100ms.
   * `/help` &rarr; Prints the complete command manual with parameter specifications.
-* **Embedded Test & Simulation Console:** In the Dossiers tab, operators can dispatch test alert pulses and execute 2-way bot terminal commands with immediate transmission feedback.
+* **Embedded Multi-Messenger Hub:** In the Dossiers tab, operators can switch between WhatsApp and Telegram, configure destination phone numbers, dispatch test pulses, and execute commands in real time.
 
 ---
 
@@ -683,6 +689,10 @@ flowchart LR
 | `/api/telegram/status` | `GET` | &mdash; | **Telegram bot connection status, configured mode & chat ID** |
 | `/api/telegram/test` | `POST` | &mdash; | **Dispatch immediate test alert pulse to Telegram** |
 | `/api/telegram/command` | `POST` | &mdash; | **Execute 2-way remote command (`/status`, `/water <sec>`, `/stop`)** |
+| `/api/whatsapp/status` | `GET` | &mdash; | **WhatsApp gateway connection status, active provider & masked phone** |
+| `/api/whatsapp/test` | `POST` | &mdash; | **Dispatch immediate test alert pulse to WhatsApp** |
+| `/api/whatsapp/command` | `POST` | &mdash; | **Execute 2-way remote command via WhatsApp (`/status`, `/water <sec>`, `/stop`)** |
+| `/api/whatsapp/config` | `POST` | &mdash; | **Configure destination WhatsApp phone number & CallMeBot API key** |
 
 ---
 
