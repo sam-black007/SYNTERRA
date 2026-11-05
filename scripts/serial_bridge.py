@@ -41,7 +41,7 @@ if env_file.exists():
     except ImportError:
         pass
 
-DEFAULT_URL = os.getenv('SYNTERRA_API_URL', 'http://localhost:5000/api/sensors/telemetry')
+DEFAULT_URL = os.getenv('SYNTERRA_API_URL', 'http://127.0.0.1:5000/api/sensors/telemetry')
 DEFAULT_TOKEN = os.getenv('DEVICE_TOKEN', 'plant-lab-auth-token-9981')
 DEFAULT_BAUD = 115200
 
